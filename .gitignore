@@ -1,0 +1,53 @@
+# Python / Backend
+__pycache__/
+*.py[cod]
+*.pyd
+.env
+.env.*
+*.sqlite3
+server/.venv/
+server/venv/
+server/replay.db
+server/test_replay.db
+server/media/
+server/test_media/
+
+# Flutter / Dart
+app/.dart_tool/
+app/.packages
+app/build/
+app/**/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.metadata
+app/.idea/
+app/*.iml
+app/coverage/
+app/android/.gradle/
+app/android/local.properties
+app/android/key.properties
+app/android/**/*.keystore
+app/android/*.keystore
+replay.keystore
+app/ios/Flutter/flutter_export_environment.sh
+app/ios/Pods/
+app/ios/.symlinks/
+app/ios/Runner.xcworkspace/
+app/ios/generated.xcconfig
+app/macos/Flutter/ephemeral/
+app/linux/flutter/ephemeral/
+app/windows/flutter/ephemeral/
+app/assets/env/.env
+app/.fvm/
+
+# Tooling & OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.code-workspace
+
+# Logs & temp
+*.log
+.coverage
+.pytest_cache/

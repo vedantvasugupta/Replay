@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "264393041730",
+    "project_id": "assistant-on-desktop-6d5fb",
+    "storage_bucket": "assistant-on-desktop-6d5fb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:264393041730:android:07839df73f6a6e52e80adb",
+        "android_client_info": {
+          "package_name": "replay.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "264393041730-mummto7guqk8a7ch01gbuqr8eknpq6c1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "replay.app",
+            "certificate_hash": "91df84eda218ce6827f820e04133a6333ac3762c"
+          }
+        },
+        {
+          "client_id": "264393041730-roogacpd3cliau8pniulkn2i0ju7nlal.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "replay.app",
+            "certificate_hash": "f96f72755232cb393096b12e615a08163c9254c2"
+          }
+        },
+        {
+          "client_id": "264393041730-ppuvv0kdvt02anp25nppoi9ff6f6rafn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1-KqIKFH4KmnKtILGV5VbQ3jULu9VFMs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "264393041730-b7b31n1495sume5cmlmdvnjms973pv15.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

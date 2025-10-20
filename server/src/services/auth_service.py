@@ -46,16 +46,27 @@ class AuthService:
 
     async def authenticate_google(self, session: AsyncSession, id_token: str) -> User:
         """Authenticate user via Google OAuth ID token."""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info("🔵 [AUTH_SERVICE] Starting authenticate_google")
+        logger.info(f"🔵 [AUTH_SERVICE] Token length: {len(id_token)}")
+
         try:
             from google.oauth2 import id_token as google_id_token
             from google.auth.transport import requests
+            logger.info("✅ [AUTH_SERVICE] Google auth libraries imported successfully")
         except ImportError as exc:
+            logger.error("❌ [AUTH_SERVICE] Failed to import google auth libraries", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Google auth not configured"
             ) from exc
 
         try:
+            logger.info("🔵 [AUTH_SERVICE] Verifying Google ID token with Google servers...")
+            logger.info(f"🔵 [AUTH_SERVICE] Configured client IDs: {self.GOOGLE_CLIENT_IDS}")
+
             # Verify the token
             idinfo = google_id_token.verify_oauth2_token(
                 id_token,
@@ -63,37 +74,47 @@ class AuthService:
                 # audience=self.GOOGLE_CLIENT_IDS[0] if self.GOOGLE_CLIENT_IDS else None
             )
 
+            logger.info(f"✅ [AUTH_SERVICE] Token verified successfully!")
+            logger.info(f"🔵 [AUTH_SERVICE] Token info - Email: {idinfo.get('email')}, Sub: {idinfo.get('sub')}, Issuer: {idinfo.get('iss')}, Audience: {idinfo.get('aud')}")
+
             google_user_id = idinfo["sub"]
             email = idinfo.get("email")
 
             if not email:
+                logger.error("❌ [AUTH_SERVICE] Email not provided by Google in token")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Email not provided by Google"
                 )
 
+            logger.info(f"🔵 [AUTH_SERVICE] Checking if user exists with google_id: {google_user_id}")
             # Check if user exists with this google_id
             stmt = select(User).where(User.google_id == google_user_id)
             result = await session.execute(stmt)
             user = result.scalar_one_or_none()
 
             if user:
+                logger.info(f"✅ [AUTH_SERVICE] Existing user found with google_id (ID: {user.id}, Email: {user.email})")
                 return user
 
+            logger.info(f"🔵 [AUTH_SERVICE] No user with google_id. Checking if email exists: {email}")
             # Check if email already exists (for linking accounts)
             stmt = select(User).where(User.email == email)
             result = await session.execute(stmt)
             existing_user = result.scalar_one_or_none()
 
             if existing_user:
+                logger.info(f"🔵 [AUTH_SERVICE] Linking Google account to existing email user (ID: {existing_user.id})")
                 # Link Google account to existing email account
                 existing_user.google_id = google_user_id
                 existing_user.provider = "google"
                 session.add(existing_user)
                 await session.commit()
                 await session.refresh(existing_user)
+                logger.info(f"✅ [AUTH_SERVICE] Account linked successfully")
                 return existing_user
 
+            logger.info(f"🔵 [AUTH_SERVICE] Creating new user with email: {email}")
             # Create new user
             user = User(
                 email=email,
@@ -104,10 +125,22 @@ class AuthService:
             session.add(user)
             await session.commit()
             await session.refresh(user)
+            logger.info(f"✅ [AUTH_SERVICE] New user created successfully (ID: {user.id})")
             return user
 
         except ValueError as exc:
+            logger.error(f"❌ [AUTH_SERVICE] ValueError - Invalid Google token: {str(exc)}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Google token"
+                detail=f"Invalid Google token: {str(exc)}"
+            ) from exc
+        except HTTPException:
+            # Re-raise HTTPExceptions as-is
+            raise
+        except Exception as exc:
+            logger.error(f"❌ [AUTH_SERVICE] Unexpected error in authenticate_google: {str(exc)}", exc_info=True)
+            logger.error(f"❌ [AUTH_SERVICE] Exception type: {type(exc).__name__}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Authentication failed: {str(exc)}"
             ) from exc

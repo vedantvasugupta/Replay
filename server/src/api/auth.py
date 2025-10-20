@@ -59,6 +59,32 @@ async def google_auth(
     auth_service: AuthService = Depends(get_auth_service),
 ) -> TokenPair:
     """Authenticate with Google OAuth ID token."""
-    user = await auth_service.authenticate_google(db, payload.id_token)
-    access, refresh = auth_service.issue_tokens(user)
-    return TokenPair(access_token=access, refresh_token=refresh)
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info("=" * 80)
+    logger.info("🔵 [ENDPOINT] Received POST /auth/google request")
+    logger.info(f"🔵 [ENDPOINT] ID token length: {len(payload.id_token)}")
+    logger.info(f"🔵 [ENDPOINT] ID token preview: {payload.id_token[:50]}...")
+
+    try:
+        logger.info("🔵 [ENDPOINT] Calling auth_service.authenticate_google...")
+        user = await auth_service.authenticate_google(db, payload.id_token)
+
+        logger.info(f"✅ [ENDPOINT] User authenticated: {user.email} (ID: {user.id})")
+        logger.info("🔵 [ENDPOINT] Issuing tokens...")
+
+        access, refresh = auth_service.issue_tokens(user)
+
+        logger.info(f"✅ [ENDPOINT] Tokens issued successfully (access length: {len(access)}, refresh length: {len(refresh)})")
+        logger.info("=" * 80)
+
+        return TokenPair(access_token=access, refresh_token=refresh)
+    except HTTPException as e:
+        logger.error(f"❌ [ENDPOINT] HTTPException: {e.status_code} - {e.detail}")
+        logger.error("=" * 80)
+        raise
+    except Exception as e:
+        logger.error(f"❌ [ENDPOINT] Unexpected error: {str(e)}", exc_info=True)
+        logger.error("=" * 80)
+        raise

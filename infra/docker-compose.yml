@@ -1,0 +1,20 @@
+version: '3.9'
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.server
+    env_file:
+      - ../server/.env.example
+    volumes:
+      - ../server:/app
+      - media_data:/app/media
+      - alembic_data:/app/alembic
+    ports:
+      - "8000:8000"
+    command: uvicorn src.app:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  media_data:
+  alembic_data:

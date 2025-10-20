@@ -57,7 +57,7 @@ def create_app() -> FastAPI:
 
     storage_service = StorageService()
     gemini_service = GeminiService()
-    transcription_service = TranscriptionService(gemini_service)
+    transcription_service = TranscriptionService(gemini_service, storage_service)
     session_service = SessionService()
     chat_service = ChatService(gemini_service)
     auth_service = AuthService()

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from pathlib import Path
-
 from fastapi import HTTPException, status
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +17,7 @@ from ..schemas.session import (
     TranscriptRead,
     TranscriptSegment,
 )
+from .storage_service import StorageService
 
 
 class SessionService:
@@ -83,7 +82,14 @@ class SessionService:
         db.add(session_obj)
         await db.commit()
 
-    async def delete_session(self, db: AsyncSession, user_id: int, session_id: int, jobs_service: "JobsService") -> None:
+    async def delete_session(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        session_id: int,
+        jobs_service: "JobsService",
+        storage_service: StorageService,
+    ) -> None:
         """Delete a session, cancel any processing jobs, and remove audio file."""
         # Load session with audio asset relationship
         stmt = (
@@ -100,7 +106,7 @@ class SessionService:
 
         # Delete audio file from storage if it exists
         if session_obj.audio_asset and session_obj.audio_asset.path:
-            audio_path = Path(session_obj.audio_asset.path)
+            audio_path = storage_service.resolve_asset_path(session_obj.audio_asset)
             try:
                 if audio_path.exists():
                     audio_path.unlink()

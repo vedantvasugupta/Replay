@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sqlite3:*)",
+      "Bash(railway up:*)",
+      "Bash(railway logs:*)",
+      "Bash(railway status:*)",
+      "Bash(powershell:*)",
+      "Bash(java:*)",
+      "Bash(gradlew:*)",
+      "Bash(alembic upgrade:*)",
+      "Bash(pip install:*)",
+      "Bash(flutter pub:*)",
+      "Bash(flutter:*)",
+      "Bash(dir:*)",
+      "Bash(ipconfig:*)",
+      "Bash(findstr:*)",
+      "Bash(alembic revision:*)",
+      "Bash(python scripts/init_db.py:*)",
+      "Bash(python -m scripts.init_db:*)",
+      "Bash(cat:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

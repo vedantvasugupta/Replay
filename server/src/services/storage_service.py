@@ -18,22 +18,62 @@ class StorageService:
         settings = get_settings().storage()
         self.media_root = settings.media_root
         self.media_root.mkdir(parents=True, exist_ok=True)
+        # Always work with an absolute media root path for consistency across OSes.
+        self.media_root = self.media_root.resolve()
 
     def _build_path(self, user_id: int, filename: str) -> Path:
         extension = Path(filename).suffix or ".m4a"
         return self.media_root / str(user_id) / f"{uuid4().hex}{extension}"
 
+    def _normalize_asset_path(self, asset: AudioAsset) -> Path:
+        """Normalize stored asset paths and return the absolute filesystem location."""
+        raw_path = (asset.path or "").strip()
+        normalized = raw_path.replace("\\", "/")
+        if normalized.startswith("./"):
+            normalized = normalized[2:]
+
+        path = Path(normalized) if normalized else Path()
+        resolved: Path
+        stored_value: str
+
+        if path.is_absolute():
+            try:
+                parts = list(path.relative_to(self.media_root).parts)
+            except ValueError:
+                resolved = path.resolve()
+                stored_value = resolved.as_posix()
+            else:
+                resolved = (self.media_root.joinpath(*parts)).resolve()
+                stored_value = "/".join(parts)
+        else:
+            parts = list(path.parts)
+            media_root_name = self.media_root.name
+            if parts and parts[0] == media_root_name:
+                parts = parts[1:]
+            resolved = (self.media_root.joinpath(*parts)).resolve()
+            stored_value = "/".join(parts)
+
+        if asset.path != stored_value:
+            asset.path = stored_value
+        return resolved
+
+    def resolve_asset_path(self, asset: AudioAsset) -> Path:
+        """Public helper so other services can resolve normalized paths."""
+        return self._normalize_asset_path(asset)
+
     async def create_asset(self, session: AsyncSession, user: User, filename: str, mime: str) -> AudioAsset:
         path = self._build_path(user.id, filename)
         path.parent.mkdir(parents=True, exist_ok=True)
-        asset = AudioAsset(user_id=user.id, path=str(path), filename=filename, mime=mime, size=0)
+        relative_parts = list(path.relative_to(self.media_root).parts)
+        stored_path = "/".join(relative_parts)
+        asset = AudioAsset(user_id=user.id, path=stored_path, filename=filename, mime=mime, size=0)
         session.add(asset)
         await session.commit()
         await session.refresh(asset)
         return asset
 
     async def save_upload(self, asset: AudioAsset, file: UploadFile) -> int:
-        path = Path(asset.path)
+        path = self._normalize_asset_path(asset)
         path.parent.mkdir(parents=True, exist_ok=True)
         size = 0
         with path.open("wb") as outfile:
@@ -54,4 +94,5 @@ class StorageService:
         return asset
 
     def open_binary(self, asset: AudioAsset) -> BinaryIO:
-        return Path(asset.path).open("rb")
+        path = self._normalize_asset_path(asset)
+        return path.open("rb")

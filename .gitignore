@@ -49,5 +49,6 @@ Thumbs.db
 
 # Logs & temp
 *.log
+server/server_logs.txt
 .coverage
 .pytest_cache/

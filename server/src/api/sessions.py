@@ -10,6 +10,7 @@ from ..schemas.session import MessageRead, SessionDetail, SessionListItem, Updat
 from ..services.chat_service import ChatService
 from ..services.jobs_service import JobsService
 from ..services.session_service import SessionService
+from ..services.storage_service import StorageService
 
 
 def get_session_service() -> SessionService:
@@ -28,6 +29,12 @@ def get_jobs_service() -> JobsService:
     from ..app import get_app_state
 
     return get_app_state().jobs_service
+
+
+def get_storage_service() -> StorageService:
+    from ..app import get_app_state
+
+    return get_app_state().storage_service
 
 
 router = APIRouter(tags=["sessions"])
@@ -137,8 +144,9 @@ async def delete_session(
     db: AsyncSession = Depends(get_db_session),
     session_service: SessionService = Depends(get_session_service),
     jobs_service: JobsService = Depends(get_jobs_service),
+    storage_service: StorageService = Depends(get_storage_service),
 ):
-    await session_service.delete_session(db, user.id, session_id, jobs_service)
+    await session_service.delete_session(db, user.id, session_id, jobs_service, storage_service)
     return {"success": True, "message": "Session deleted successfully"}
 
 

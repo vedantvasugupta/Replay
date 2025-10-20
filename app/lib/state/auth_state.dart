@@ -151,27 +151,45 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> signInWithGoogle() async {
+    print('🔵 [AUTH] Starting Google Sign-In...');
     state = state.copyWith(isLoading: true, clearError: true);
     try {
+      print('🔵 [AUTH] Initializing GoogleSignIn...');
       final googleSignIn = GoogleSignIn();
+
+      print('🔵 [AUTH] Calling googleSignIn.signIn()...');
       final googleUser = await googleSignIn.signIn();
 
       if (googleUser == null) {
+        print('⚠️ [AUTH] User canceled Google Sign-In');
         // User canceled the sign-in
         state = state.copyWith(isLoading: false);
         return;
       }
 
+      print('✅ [AUTH] Google user obtained: ${googleUser.email}');
+      print('🔵 [AUTH] Getting authentication token...');
       final googleAuth = await googleUser.authentication;
       final idToken = googleAuth.idToken;
 
       if (idToken == null) {
+        print('❌ [AUTH] Failed to get Google ID token');
         throw Exception('Failed to get Google ID token');
       }
 
+      print('✅ [AUTH] ID Token obtained (length: ${idToken.length})');
+      print('🔵 [AUTH] ID Token preview: ${idToken.substring(0, 50)}...');
+      print('🔵 [AUTH] Sending ID token to backend at /auth/google...');
+
       final tokens = await _repository.signInWithGoogle(idToken);
+
+      print('✅ [AUTH] Backend authentication successful!');
+      print('🔵 [AUTH] Access token received (length: ${tokens.accessToken.length})');
+      print('🔵 [AUTH] Saving tokens to store...');
+
       await _store.save(tokens);
 
+      print('✅ [AUTH] Google Sign-In completed successfully for ${googleUser.email}');
       state = state.copyWith(
         status: AuthStatus.authenticated,
         tokens: tokens,
@@ -179,7 +197,9 @@ class AuthController extends StateNotifier<AuthState> {
         isLoading: false,
         clearError: true,
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      print('❌ [AUTH] Google Sign-In error: $error');
+      print('❌ [AUTH] Stack trace: $stackTrace');
       String errorMessage = 'Google sign in failed';
       if (error.toString().contains('network') || error.toString().contains('connection')) {
         errorMessage = 'Network error. Please check your internet connection.';

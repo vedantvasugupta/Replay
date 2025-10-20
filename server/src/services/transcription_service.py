@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,11 +11,13 @@ from ..models.transcript import Transcript
 from ..models.summary import Summary
 from ..models.audio_asset import AudioAsset
 from .gemini_service import GeminiService
+from .storage_service import StorageService
 
 
 class TranscriptionService:
-    def __init__(self, gemini: GeminiService) -> None:
+    def __init__(self, gemini: GeminiService, storage: StorageService) -> None:
         self._gemini = gemini
+        self._storage = storage
 
     async def process_session(self, db: AsyncSession, session_id: int) -> None:
         """Process a session with partial success handling."""
@@ -33,7 +33,7 @@ class TranscriptionService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session missing audio asset")
 
         asset: AudioAsset = session_obj.audio_asset
-        path = Path(asset.path)
+        path = self._storage.resolve_asset_path(asset)
         if not path.exists():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audio file missing")
 

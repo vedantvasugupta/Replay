@@ -26,6 +26,16 @@ class SessionListController extends StateNotifier<AsyncValue<List<SessionListIte
     }
   }
 
+  Future<void> refreshSilently() async {
+    try {
+      final sessions = await _repository.fetchSessions();
+      state = AsyncValue.data(sessions);
+    } catch (error, stack) {
+      // Silently fail, don't update state with error
+      print('Silent refresh failed: $error');
+    }
+  }
+
   Future<void> deleteSession(int sessionId) async {
     try {
       await _repository.deleteSession(sessionId);

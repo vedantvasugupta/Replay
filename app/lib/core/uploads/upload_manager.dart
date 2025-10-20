@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../domain/session_models.dart';
 import '../providers.dart';
 import '../sessions/session_repository.dart';
 
@@ -105,20 +104,35 @@ class UploadManager {
 
   Future<void> _execute(PendingUpload upload) async {
     try {
+      print('[UploadManager] Starting upload for: ${upload.filePath}');
+
       final allocation = await _repository.requestUpload(
         filename: File(upload.filePath).uri.pathSegments.last,
         mime: upload.mime,
       );
-      await _repository.uploadFile(assetId: allocation.assetId, file: File(upload.filePath), mime: upload.mime);
-      await _repository.ingest(
+      print('[UploadManager] Got allocation, assetId: ${allocation.assetId}');
+
+      await _repository.uploadFile(
+        assetId: allocation.assetId,
+        file: File(upload.filePath),
+        mime: upload.mime,
+      );
+      print('[UploadManager] File uploaded successfully');
+
+      final sessionId = await _repository.ingest(
         assetId: allocation.assetId,
         durationSec: upload.durationSec,
         title: upload.title,
       );
-      await File(upload.filePath).delete().catchError((_) {});
+      print('[UploadManager] Ingest complete, sessionId: $sessionId');
+
+      await File(upload.filePath).delete().catchError((_) => File(''));
       _pending.remove(upload);
       await _persist();
-    } catch (_) {
+      print('[UploadManager] Upload completed successfully');
+    } catch (e, stackTrace) {
+      print('[UploadManager] Upload failed: $e');
+      print('[UploadManager] Stack trace: $stackTrace');
       // Keep upload in queue; will retry later.
     }
   }

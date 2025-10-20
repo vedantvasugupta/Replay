@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/uploads/audio_picker_service.dart';
+import '../../core/uploads/upload_manager.dart';
 import '../../domain/session_models.dart';
 import '../../state/auth_state.dart';
 import '../../state/recorder_controller.dart';
@@ -38,7 +40,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // Check if any sessions are still processing
         final hasProcessing = items.any((s) => s.status == SessionStatus.processing);
         if (hasProcessing) {
-          ref.read(sessionListControllerProvider.notifier).refresh();
+          ref.read(sessionListControllerProvider.notifier).refreshSilently();
         }
       });
 
@@ -71,10 +73,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       letterSpacing: -0.5,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.logout_rounded),
-                    onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
-                    tooltip: 'Sign out',
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.upload_file_rounded),
+                        onPressed: () => _handleUploadAudio(context, ref),
+                        tooltip: 'Upload audio',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.logout_rounded),
+                        onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
+                        tooltip: 'Sign out',
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -354,6 +365,112 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         break;
       case RecorderStatus.uploading:
         break;
+    }
+  }
+
+  Future<void> _handleUploadAudio(BuildContext context, WidgetRef ref) async {
+    try {
+      final audioPicker = ref.read(audioPickerServiceProvider);
+      final uploadManager = ref.read(uploadManagerProvider);
+      final sessionNotifier = ref.read(sessionListControllerProvider.notifier);
+
+      // Show loading indicator
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Selecting audio file...'),
+            backgroundColor: const Color(0xFF1E1E1E),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 1),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+
+      // Pick audio file
+      final result = await audioPicker.pickAudioFile();
+
+      if (result == null) {
+        // User cancelled the picker
+        return;
+      }
+
+      // Validate the audio file
+      final isValid = await audioPicker.validateAudioFile(result.file);
+      if (!isValid) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Invalid audio file. Please select a supported audio file (max 500MB).'),
+              backgroundColor: const Color(0xFFFF3B30),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show upload progress
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Uploading audio file...'),
+            backgroundColor: const Color(0xFF1E1E1E),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+
+      // Create pending upload and enqueue
+      final fileName = audioPicker.getDisplayName(result.file);
+      final upload = PendingUpload(
+        filePath: result.file.path,
+        durationSec: result.durationSec ?? 0,
+        mime: result.mimeType,
+        createdAt: DateTime.now(),
+        title: fileName.replaceAll(RegExp(r'\.[^.]*$'), ''), // Remove file extension for title
+      );
+
+      await uploadManager.enqueueAndUpload(upload);
+
+      // Refresh session list
+      await sessionNotifier.refresh();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Audio uploaded successfully! AI transcription may take 1-2 minutes.'),
+            backgroundColor: const Color(0xFF1E1E1E),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload audio: ${e.toString()}'),
+            backgroundColor: const Color(0xFFFF3B30),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
     }
   }
 }

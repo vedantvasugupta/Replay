@@ -54,14 +54,35 @@ class AuthRepository {
   }
 
   Future<AuthTokens> signInWithGoogle(String idToken) async {
-    final response = await _dio.post<Map<String, dynamic>>(
-      '/auth/google',
-      data: {'idToken': idToken},
-    );
-    final data = response.data!;
-    return AuthTokens(
-      accessToken: data['accessToken'] as String,
-      refreshToken: data['refreshToken'] as String,
-    );
+    print('🌐 [REPO] Calling POST /auth/google');
+    print('🌐 [REPO] Base URL: ${_dio.options.baseUrl}');
+    print('🌐 [REPO] Full URL: ${_dio.options.baseUrl}/auth/google');
+    print('🌐 [REPO] ID Token length: ${idToken.length}');
+
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/auth/google',
+        data: {'idToken': idToken},
+      );
+
+      print('✅ [REPO] Response status: ${response.statusCode}');
+      print('✅ [REPO] Response data: ${response.data}');
+
+      final data = response.data!;
+      return AuthTokens(
+        accessToken: data['accessToken'] as String,
+        refreshToken: data['refreshToken'] as String,
+      );
+    } catch (e) {
+      print('❌ [REPO] Error during /auth/google request: $e');
+      if (e is DioException) {
+        print('❌ [REPO] DioException type: ${e.type}');
+        print('❌ [REPO] Status code: ${e.response?.statusCode}');
+        print('❌ [REPO] Response data: ${e.response?.data}');
+        print('❌ [REPO] Response headers: ${e.response?.headers}');
+        print('❌ [REPO] Request data: ${e.requestOptions.data}');
+      }
+      rethrow;
+    }
   }
 }

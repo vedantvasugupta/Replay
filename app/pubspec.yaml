@@ -1,4 +1,4 @@
-name: replay_app
+name: replay
 description: "Replay meeting note-taker mobile client"
 publish_to: "none"
 version: 0.1.0+1

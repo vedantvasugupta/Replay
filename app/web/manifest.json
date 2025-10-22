@@ -1,6 +1,6 @@
 {
-    "name": "replay_app",
-    "short_name": "replay_app",
+    "name": "Replay",
+    "short_name": "Replay",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

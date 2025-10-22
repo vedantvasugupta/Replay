@@ -28,6 +28,7 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_lints: ^3.0.1
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
@@ -37,3 +38,8 @@ flutter:
 dependency_overrides:
   record_linux:
     path: third_party/record_linux
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/sound-wave.png"

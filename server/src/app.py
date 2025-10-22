@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import cast
 
 from fastapi import FastAPI
@@ -34,7 +34,7 @@ class AppState:
     session_service: SessionService
     chat_service: ChatService
     jobs_service: JobsService
-    worker: asyncio.Task[None] | None = None
+    workers: list[asyncio.Task[None]] = field(default_factory=list)
 
 
 def get_app_state() -> AppState:
@@ -82,7 +82,8 @@ def create_app() -> FastAPI:
         import logging
         from sqlalchemy import select
         logger = logging.getLogger("uvicorn")
-        logger.info("🚀 Starting background worker...")
+        concurrency = max(1, settings.background_worker_concurrency)
+        logger.info(f"🚀 Starting background workers (concurrency={concurrency})...")
 
         state = get_app_state()
 
@@ -102,8 +103,20 @@ def create_app() -> FastAPI:
             session_id = payload["session_id"]
             logger.info(f"Processing job {job.id} for session {session_id}")
             try:
-                await state.transcription_service.process_session(db, session_id)
+                # Add 10-minute timeout to prevent workers from getting stuck
+                await asyncio.wait_for(
+                    state.transcription_service.process_session(db, session_id),
+                    timeout=600.0  # 10 minutes
+                )
                 logger.info(f"✅ Job {job.id} completed successfully")
+            except asyncio.TimeoutError:
+                logger.error(f"❌ Job {job.id} timed out after 10 minutes")
+                session_obj = await db.get(Session, session_id)
+                if session_obj:
+                    session_obj.status = SessionStatus.failed
+                    db.add(session_obj)
+                    await db.commit()
+                raise
             except Exception as e:
                 logger.error(f"❌ Job {job.id} failed: {e}")
                 session_obj = await db.get(Session, session_id)
@@ -113,18 +126,27 @@ def create_app() -> FastAPI:
                     await db.commit()
                 raise
 
-        state.worker = asyncio.create_task(
-            state.jobs_service.run_worker(async_session_factory, handler, poll_interval=settings.background_poll_interval)
-        )
-        logger.info("✅ Background worker started successfully")
+        state.workers = []
+        for idx in range(concurrency):
+            worker_task = asyncio.create_task(
+                state.jobs_service.run_worker(
+                    async_session_factory,
+                    handler,
+                    poll_interval=settings.background_poll_interval,
+                )
+            )
+            state.workers.append(worker_task)
+            logger.info(f"✅ Background worker #{idx + 1} started")
 
     @app.on_event("shutdown")
     async def shutdown_worker() -> None:
         state = get_app_state()
-        if state.worker:
-            state.worker.cancel()
+        for worker in state.workers:
+            worker.cancel()
+        for worker in state.workers:
             with contextlib.suppress(asyncio.CancelledError):
-                await state.worker
+                await worker
+        state.workers.clear()
 
     return app
 

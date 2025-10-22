@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     gemini_model: str = Field(default="gemini-2.5-pro", alias="GEMINI_MODEL")
     gemini_api_key: Optional[str] = Field(default=None, alias="GEMINI_API_KEY")
     background_poll_interval: int = Field(default=5, alias="BACKGROUND_POLL_INTERVAL")
+    background_worker_concurrency: int = Field(
+        default=2,
+        ge=1,
+        alias="BACKGROUND_WORKER_CONCURRENCY",
+    )
 
     def jwt(self) -> JwtSettings:
         return JwtSettings(

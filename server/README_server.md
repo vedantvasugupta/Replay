@@ -51,4 +51,4 @@ pytest
 - **Storage**: implement a new service conforming to `StorageService` in `src/services/storage_service.py` (e.g. `S3StorageService`). Update `StorageSettings.provider` to select the implementation.
 
 ## Background Processing
-A lightweight in-process jobs queue pushes transcription work onto an async worker created at startup. For hosted environments, replace `JobsService` with an adapter to your task runner, keeping the `enqueue_transcription` interface stable.
+A lightweight in-process jobs queue pushes transcription work onto an async worker created at startup. Each transcription job has a 10-minute timeout to prevent workers from getting stuck on API failures. Configure parallelism with the `BACKGROUND_WORKER_CONCURRENCY` environment variable (defaults to `2`). For hosted environments, replace `JobsService` with an adapter to your task runner, keeping the `enqueue_transcription` interface stable.

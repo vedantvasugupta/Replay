@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -20,19 +21,13 @@ class ForegroundServiceManager {
         channelDescription: 'This notification appears when Replay is recording audio.',
         channelImportance: NotificationChannelImportance.LOW,
         priority: NotificationPriority.LOW,
-        iconData: const NotificationIconData(
-          resType: ResourceType.mipmap,
-          resPrefix: ResourcePrefix.ic,
-          name: 'launcher',
-        ),
       ),
       iosNotificationOptions: const IOSNotificationOptions(
         showNotification: true,
         playSound: false,
       ),
-      foregroundTaskOptions: const ForegroundTaskOptions(
-        interval: 5000,
-        isOnceEvent: false,
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.repeat(5000),
         autoRunOnBoot: false,
         allowWakeLock: true,
         allowWifiLock: true,
@@ -53,17 +48,17 @@ class ForegroundServiceManager {
       }
     }
 
-    final success = await FlutterForegroundTask.startService(
+    final result = await FlutterForegroundTask.startService(
       notificationTitle: 'Recording in progress',
       notificationText: 'Tap to return to the app',
       callback: startCallback,
     );
 
-    if (success) {
+    if (result is ServiceRequestSuccess) {
       _isRunning = true;
     }
 
-    return success;
+    return result is ServiceRequestSuccess;
   }
 
   /// Update the notification with current recording time
@@ -84,11 +79,11 @@ class ForegroundServiceManager {
   static Future<bool> stop() async {
     if (!_isRunning || kIsWeb) return false;
 
-    final success = await FlutterForegroundTask.stopService();
-    if (success) {
+    final result = await FlutterForegroundTask.stopService();
+    if (result is ServiceRequestSuccess) {
       _isRunning = false;
     }
-    return success;
+    return result is ServiceRequestSuccess;
   }
 
   /// Check if service is running
@@ -104,23 +99,23 @@ void startCallback() {
 /// Task handler for the foreground service
 class RecordingTaskHandler extends TaskHandler {
   @override
-  Future<void> onStart(DateTime timestamp, SendPort? sendPort) async {
+  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     // Called when the task starts
   }
 
   @override
-  Future<void> onRepeatEvent(DateTime timestamp, SendPort? sendPort) async {
+  void onRepeatEvent(DateTime timestamp) {
     // Called periodically based on interval (every 5 seconds)
     // We don't need to do anything here as the notification is updated manually
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp, SendPort? sendPort) async {
+  Future<void> onDestroy(DateTime timestamp) async {
     // Called when the task is destroyed
   }
 
   @override
-  void onButtonPressed(String id) {
+  void onNotificationButtonPressed(String id) {
     // Called when notification button is pressed
   }
 
@@ -128,5 +123,10 @@ class RecordingTaskHandler extends TaskHandler {
   void onNotificationPressed() {
     // Called when notification itself is pressed
     FlutterForegroundTask.launchApp('/');
+  }
+
+  @override
+  void onNotificationDismissed() {
+    // Called when notification is dismissed
   }
 }

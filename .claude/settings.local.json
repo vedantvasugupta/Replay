@@ -18,7 +18,16 @@
       "Bash(alembic revision:*)",
       "Bash(python scripts/init_db.py:*)",
       "Bash(python -m scripts.init_db:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git stash show:*)",
+      "Bash(git checkout:*)",
+      "Bash(git stash:*)",
+      "Bash(railway whoami:*)",
+      "Bash(git push:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git check-ignore:*)"
     ],
     "deny": [],
     "ask": []

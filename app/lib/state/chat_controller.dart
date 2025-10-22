@@ -39,7 +39,7 @@ class ChatController extends StateNotifier<AsyncValue<List<ChatMessage>>> {
         citations: response.citations,
         createdAt: DateTime.now(),
       );
-      final messages = [...(state.value ?? [])];
+      final messages = <ChatMessage>[...(state.value ?? [])];
       final placeholderIndex = messages.lastIndexWhere((msg) => msg.isThinking && msg.role == 'assistant');
       if (placeholderIndex != -1) {
         messages[placeholderIndex] = assistant;

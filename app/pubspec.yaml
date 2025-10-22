@@ -24,6 +24,7 @@ dependencies:
   flutter_foreground_task: ^8.0.0
   permission_handler: ^11.3.0
   flutter_secure_storage: ^9.0.0
+  flutter_markdown: ^0.7.3
 
 dev_dependencies:
   flutter_test:

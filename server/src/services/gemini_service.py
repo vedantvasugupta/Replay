@@ -38,12 +38,31 @@ class GeminiService:
 
         data = audio_path.read_bytes()
 
-        # Combined prompt for transcription, summary, and title generation
-        prompt = """Transcribe this meeting audio, then analyze it.
+        # Combined prompt for transcription, summary, and title generation with speaker diarization
+        prompt = """Transcribe this meeting audio with speaker identification, then analyze it.
+
+Identify different speakers in the audio and label them as Speaker 1, Speaker 2, etc.
 
 Return your response in the following JSON format:
 {
-  "transcript": "full verbatim transcription",
+  "transcript": "full verbatim transcription with speaker labels, e.g., 'Speaker 1: Hello. Speaker 2: Hi there.'",
+  "speakers": [
+    {
+      "id": "Speaker 1",
+      "characteristics": "brief description of voice (e.g., male, deep voice)"
+    },
+    {
+      "id": "Speaker 2",
+      "characteristics": "brief description of voice (e.g., female, higher pitch)"
+    }
+  ],
+  "utterances": [
+    {
+      "speaker": "Speaker 1",
+      "text": "the text spoken",
+      "start_time": "approximate start time in seconds or description like 'beginning', 'middle', 'end'"
+    }
+  ],
   "title": "brief descriptive title (max 6 words)",
   "summary": "2-3 sentence overview of the meeting",
   "action_items": ["list", "of", "action", "items"],
@@ -51,7 +70,7 @@ Return your response in the following JSON format:
   "decisions": ["decisions", "made"]
 }
 
-Important: Return ONLY valid JSON, no markdown formatting."""
+Important: Return ONLY valid JSON, no markdown formatting. If only one speaker is detected, still use the Speaker 1 format."""
 
         payload = {
             "contents": [
@@ -86,9 +105,28 @@ Important: Return ONLY valid JSON, no markdown formatting."""
         try:
             import json
             result = json.loads(text)
+
+            # Extract speaker information
+            speakers = result.get("speakers", [])
+            utterances = result.get("utterances", [])
+
+            # Build segments from utterances if available
+            segments = []
+            if utterances:
+                for utterance in utterances:
+                    segments.append({
+                        "speaker": utterance.get("speaker", "Unknown"),
+                        "text": utterance.get("text", ""),
+                        "start_time": utterance.get("start_time", "unknown"),
+                    })
+            else:
+                # Fallback to single segment
+                segments = [{"start": 0.0, "end": max(30.0, len(result.get("transcript", text).split()) / 2.0), "text": result.get("transcript", text)}]
+
             return {
                 "text": result.get("transcript", text),
-                "segments": [{"start": 0.0, "end": max(30.0, len(result.get("transcript", text).split()) / 2.0), "text": result.get("transcript", text)}],
+                "segments": segments,
+                "speakers": speakers,
                 "title": result.get("title", "Untitled Recording"),
                 "summary": {
                     "summary": result.get("summary", ""),
@@ -97,11 +135,13 @@ Important: Return ONLY valid JSON, no markdown formatting."""
                     "decisions": result.get("decisions", []),
                 },
             }
-        except Exception:
+        except Exception as e:
             # Fallback if JSON parsing fails
+            print(f"[GeminiService] Failed to parse JSON response: {e}")
             return {
                 "text": text,
                 "segments": [{"start": 0.0, "end": max(30.0, len(text.split()) / 2.0), "text": text}],
+                "speakers": [],
                 "title": "Untitled Recording",
                 "summary": {
                     "summary": text[:500],
@@ -147,15 +187,29 @@ Important: Return ONLY valid JSON, no markdown formatting."""
         text = self._extract_text(body)
         return self._coerce_summary(text)
 
-    async def answer(self, question: str, transcript_text: str) -> dict[str, Any]:
+    async def answer(self, question: str, transcript_text: str, chat_history: list[dict] = None) -> dict[str, Any]:
         if not self.api_key:
             answer = self._keyword_answer(question, transcript_text)
             return {"answer": answer, "citations": []}
 
+        # Build conversation context from chat history
+        history_context = ""
+        if chat_history:
+            history_lines = []
+            for msg in chat_history[-10:]:  # Last 10 messages for context
+                role = msg.get("role", "").upper()
+                content = msg.get("content", "")
+                history_lines.append(f"{role}: {content}")
+            if history_lines:
+                history_context = "\n\nConversation History:\n" + "\n".join(history_lines)
+
         prompt = (
-            "You are a helpful meeting assistant. Answer the user's question strictly using the supplied transcript. "
+            "You are a helpful meeting assistant with memory of our conversation. "
+            "Answer the user's question using the supplied transcript and our conversation history. "
             "Quote the relevant excerpts with timestamps if supplied.\n\n"
-            f"Transcript:\n{transcript_text}\n\nQuestion: {question}"
+            f"Transcript:\n{transcript_text}"
+            f"{history_context}\n\n"
+            f"Current Question: {question}"
         )
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(

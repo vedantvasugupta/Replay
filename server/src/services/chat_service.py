@@ -31,8 +31,24 @@ class ChatService:
         if session_obj.status != SessionStatus.ready or not session_obj.transcript:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Transcript not ready")
 
+        # Load previous messages for conversation context (last 20 messages)
+        messages_stmt = (
+            select(Message)
+            .where(Message.session_id == session_id)
+            .order_by(Message.created_at.desc())
+            .limit(20)
+        )
+        messages_result = await db.scalars(messages_stmt)
+        previous_messages = list(reversed(list(messages_result)))  # Reverse to chronological order
+
+        # Build chat history for context
+        chat_history = [
+            {"role": msg.role.value, "content": msg.content}
+            for msg in previous_messages
+        ]
+
         transcript_text = session_obj.transcript.text
-        result = await self._gemini.answer(user_message, transcript_text)
+        result = await self._gemini.answer(user_message, transcript_text, chat_history)
         answer_text = result.get("answer", "")
         citations = result.get("citations", [])
 

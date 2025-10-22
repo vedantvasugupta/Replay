@@ -15,6 +15,7 @@ class Transcript(Base):
     session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), unique=True, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     segments_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    speakers_json: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )

@@ -63,6 +63,7 @@ class TranscriptionService:
                 session_id=session_obj.id,
                 text=result["text"],
                 segments_json=result.get("segments", []),
+                speakers_json=result.get("speakers", []),
             )
             db.add(transcript)
             try:

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../../domain/session_models.dart';
 import '../../state/chat_controller.dart';
@@ -1179,42 +1180,35 @@ class _FormattedParagraph extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final lines = trimmed.split('\n');
-    final bulletPattern = RegExp(r'^[-*•]\s+');
-    final bulletLines = lines.where((line) => line.trim().isNotEmpty).toList();
-    final isBulletList =
-        !isUser && bulletLines.isNotEmpty && bulletLines.every((line) => bulletPattern.hasMatch(line.trim()));
-
-    if (isBulletList) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var i = 0; i < bulletLines.length; i++) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '•',
-                  style: style.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    bulletLines[i].trim().replaceFirst(bulletPattern, ''),
-                    style: style,
-                  ),
-                ),
-              ],
-            ),
-            if (i != bulletLines.length - 1) const SizedBox(height: 6),
-          ],
-        ],
-      );
-    }
-
-    return Text(
-      trimmed,
-      style: style,
+    // Use MarkdownBody for proper markdown rendering
+    return MarkdownBody(
+      data: trimmed,
+      styleSheet: MarkdownStyleSheet(
+        p: style,
+        strong: style.copyWith(fontWeight: FontWeight.bold),
+        em: style.copyWith(fontStyle: FontStyle.italic),
+        code: style.copyWith(
+          fontFamily: 'monospace',
+          backgroundColor: isUser
+              ? Colors.white.withOpacity(0.2)
+              : Colors.grey.withOpacity(0.1),
+        ),
+        codeblockDecoration: BoxDecoration(
+          color: isUser
+              ? Colors.white.withOpacity(0.1)
+              : Colors.grey.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        blockquote: style.copyWith(
+          fontStyle: FontStyle.italic,
+          color: style.color?.withOpacity(0.8),
+        ),
+        listBullet: style.copyWith(fontWeight: FontWeight.bold),
+        listIndent: 24,
+      ),
+      selectable: true,
+      shrinkWrap: true,
+      fitContent: true,
     );
   }
 }

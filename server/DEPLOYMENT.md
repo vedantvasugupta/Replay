@@ -14,11 +14,16 @@ When deploying this application, database migrations MUST run before the applica
 alembic upgrade head
 ```
 
-### Production (Railway/Heroku/etc)
+### Production (Railway)
 Migrations run automatically on each deployment via:
-- `railway.toml` - startCommand runs migrations first
-- `Procfile` - release phase runs migrations before web process
+- `railway.toml` - startCommand runs migrations first (at runtime)
+- `Procfile` - defines web process only (no release phase)
 - `scripts/run_migrations.py` - handles migration execution
+
+**Important:** Migrations MUST run at **runtime** (startCommand), NOT during build (release phase), because:
+- DATABASE_URL environment variable is only available at runtime
+- Database connections aren't accessible during Docker build phase
+- Running migrations during build causes "Name or service not known" errors
 
 ## Migration Workflow
 
@@ -32,10 +37,11 @@ alembic upgrade head  # Test locally
 
 ### What Happens on Railway Deployment
 1. Code is pushed to master branch
-2. Railway detects changes and builds
-3. **Migration script runs**: `python scripts/run_migrations.py`
-4. If migrations succeed → app starts
-5. If migrations fail → deployment fails (safe!)
+2. Railway detects changes and builds Docker image
+3. Container starts at runtime (DATABASE_URL now available)
+4. **Migration script runs**: `python scripts/run_migrations.py`
+5. If migrations succeed → uvicorn starts the app
+6. If migrations fail → container exits (deployment fails)
 
 ## Why Migrations Must Run on Deployment
 
@@ -76,6 +82,16 @@ When adding new database columns/tables:
 ```bash
 railway logs
 ```
+
+### "Name or service not known" Error During Build
+**Error:** `socket.gaierror: [Errno -2] Name or service not known`
+
+**Cause:** Migrations trying to run during Docker build phase when DATABASE_URL isn't available.
+
+**Solution:**
+- Migrations MUST run in `railway.toml` startCommand (runtime)
+- NOT in Procfile release phase (build time)
+- Our configuration correctly runs migrations at runtime only
 
 ### Column Already Exists Error
 If you manually added columns or ran migrations out of order:

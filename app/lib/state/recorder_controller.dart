@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/recording/foreground_service_manager.dart';
 import '../core/recording/recording_service.dart';
 import '../core/uploads/upload_manager.dart';
 
@@ -34,13 +36,39 @@ final recorderControllerProvider = StateNotifierProvider<RecorderController, Rec
   return RecorderController(uploadManager, RecordingService());
 });
 
-class RecorderController extends StateNotifier<RecorderState> {
+class RecorderController extends StateNotifier<RecorderState> with WidgetsBindingObserver {
   RecorderController(this._uploadManager, this._recordingService)
-      : super(const RecorderState(status: RecorderStatus.idle, elapsed: Duration.zero));
+      : super(const RecorderState(status: RecorderStatus.idle, elapsed: Duration.zero)) {
+    _initializeForegroundService();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   final UploadManager _uploadManager;
   final IRecordingService _recordingService;
   Timer? _ticker;
+  bool _isInBackground = false;
+
+  Future<void> _initializeForegroundService() async {
+    await ForegroundServiceManager.initialize();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _isInBackground = false;
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+        _isInBackground = true;
+        break;
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        break;
+    }
+  }
 
   Future<bool> start() async {
     try {
@@ -66,6 +94,9 @@ class RecorderController extends StateNotifier<RecorderState> {
       return false;
     }
     try {
+      // Start foreground service before recording
+      await ForegroundServiceManager.start();
+
       await _recordingService.start();
       _startTicker();
       state = state.copyWith(status: RecorderStatus.recording, elapsed: Duration.zero, error: null);
@@ -87,6 +118,9 @@ class RecorderController extends StateNotifier<RecorderState> {
 
   Future<void> stop({String? title}) async {
     _stopTicker();
+    // Stop foreground service
+    await ForegroundServiceManager.stop();
+
     state = state.copyWith(status: RecorderStatus.uploading, error: null);
     try {
       final result = await _recordingService.stop();
@@ -118,6 +152,9 @@ class RecorderController extends StateNotifier<RecorderState> {
 
   Future<void> cancel() async {
     _stopTicker();
+    // Stop foreground service
+    await ForegroundServiceManager.stop();
+
     try {
       await _recordingService.cancel();
       state = state.copyWith(status: RecorderStatus.idle, elapsed: Duration.zero);
@@ -141,6 +178,11 @@ class RecorderController extends StateNotifier<RecorderState> {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       final newElapsed = state.elapsed + const Duration(seconds: 1);
       state = state.copyWith(elapsed: newElapsed);
+
+      // Update foreground notification every 5 seconds
+      if (newElapsed.inSeconds % 5 == 0) {
+        ForegroundServiceManager.updateNotification(newElapsed);
+      }
     });
   }
 
@@ -159,6 +201,8 @@ class RecorderController extends StateNotifier<RecorderState> {
   @override
   void dispose() {
     _stopTicker();
+    WidgetsBinding.instance.removeObserver(this);
+    ForegroundServiceManager.stop();
     super.dispose();
   }
 }

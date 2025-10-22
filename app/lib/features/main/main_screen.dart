@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/uploads/audio_picker_service.dart';
 import '../../core/uploads/upload_manager.dart';
@@ -47,9 +48,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             tooltip: 'Upload audio',
           ),
           IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () => ref.read(authControllerProvider.notifier).signOut(),
-            tooltip: 'Sign out',
+            icon: const Icon(Icons.settings_rounded),
+            onPressed: () => context.push('/settings'),
+            tooltip: 'Settings',
           ),
         ],
       ),

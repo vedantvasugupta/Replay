@@ -11,8 +11,10 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   final dio = Dio(
     BaseOptions(
       baseUrl: env.apiBaseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 20),
+      // Increased timeouts for large file uploads
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(minutes: 10),
+      sendTimeout: const Duration(minutes: 10),
     ),
   );
   return ApiClient(ref, dio);

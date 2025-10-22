@@ -10,7 +10,9 @@ import '../sessions/session_repository.dart';
 final uploadManagerProvider = Provider<UploadManager>((ref) {
   final repository = ref.watch(sessionRepositoryProvider);
   final prefs = ref.watch(sharedPreferencesProvider);
-  return UploadManager(repository, prefs)..initialize();
+  // Read the keep recordings locally setting
+  final keepLocal = prefs.getBool('keep_recordings_locally') ?? false;
+  return UploadManager(repository, prefs, keepRecordingsLocally: keepLocal)..initialize();
 });
 
 class PendingUpload {
@@ -48,12 +50,13 @@ class PendingUpload {
 }
 
 class UploadManager {
-  UploadManager(this._repository, this._preferences);
+  UploadManager(this._repository, this._preferences, {this.keepRecordingsLocally = false});
 
   static const _storageKey = 'pending_uploads';
 
   final SessionRepository _repository;
   final SharedPreferences _preferences;
+  final bool keepRecordingsLocally;
   final List<PendingUpload> _pending = [];
   bool _initialized = false;
   Future<void>? _ongoing;
@@ -126,7 +129,14 @@ class UploadManager {
       );
       print('[UploadManager] Ingest complete, sessionId: $sessionId');
 
-      await File(upload.filePath).delete().catchError((_) => File(''));
+      // Only delete the file if the user hasn't opted to keep recordings locally
+      if (!keepRecordingsLocally) {
+        await File(upload.filePath).delete().catchError((_) => File(''));
+        print('[UploadManager] Local recording deleted after upload');
+      } else {
+        print('[UploadManager] Local recording kept at: ${upload.filePath}');
+      }
+
       _pending.remove(upload);
       await _persist();
       print('[UploadManager] Upload completed successfully');

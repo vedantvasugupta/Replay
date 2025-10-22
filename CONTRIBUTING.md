@@ -53,6 +53,40 @@
    - Proper loading states for async operations
    - Error recovery with user-friendly messages
 
+## Branching Strategy
+
+This repository uses a two-branch workflow:
+
+### Branch Roles
+- **`master`** - Development branch linked to Railway CI/CD pipeline
+  - All active development happens here
+  - Automatically deploys to Railway on push
+  - Used for testing and staging
+  - May contain experimental features
+
+- **`main`** - Stable release branch
+  - Contains production-ready code
+  - Only updated when master is stable and tested
+  - Used for versioned releases
+  - Should always be deployable
+
+### Workflow
+1. **Feature Development**: Create feature branches from `master` (e.g., `feature/speaker-diarization`)
+2. **Testing**: Merge feature branches into `master` for CI/CD testing
+3. **Stabilization**: Once `master` is stable and tested, sync it to `main`
+4. **Releases**: Tag releases from `main` branch
+
+### Branch Sync Commands
+```bash
+# Sync main to match master (when master is stable)
+git checkout main
+git reset --hard master
+git push origin main --force-with-lease
+
+# Create a feature branch
+git checkout -b feature/your-feature-name master
+```
+
 ## Before Submitting
 1. Ensure `pytest` and `flutter test` pass.
 2. Update documentation/ENV samples when adding config.

@@ -372,116 +372,9 @@ class _SummaryAndChatViewState extends ConsumerState<_SummaryAndChatView> {
                       }
 
                       return Column(
-                        children: items.map((message) {
-                          final isUser = message.role == 'user';
-                          return Align(
-                            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                            child: Container(
-                              constraints: BoxConstraints(
-                                maxWidth: MediaQuery.of(context).size.width * 0.75,
-                              ),
-                              margin: const EdgeInsets.only(bottom: 16),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: isUser
-                                    ? const Color(0xFF6366F1)
-                                    : const Color(0xFF1E1E1E),
-                                borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(16),
-                                  topRight: const Radius.circular(16),
-                                  bottomLeft: Radius.circular(isUser ? 16 : 4),
-                                  bottomRight: Radius.circular(isUser ? 4 : 16),
-                                ),
-                                border: isUser
-                                    ? null
-                                    : Border.all(
-                                        color: Colors.white.withOpacity(0.05),
-                                      ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    message.content,
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      height: 1.5,
-                                      color: isUser
-                                          ? Colors.white
-                                          : Colors.white.withOpacity(0.9),
-                                      letterSpacing: 0.25,
-                                    ),
-                                  ),
-                                  if (message.citations != null && message.citations!.isNotEmpty) ...[
-                                    const SizedBox(height: 12),
-                                    Container(
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.format_quote_rounded,
-                                                size: 14,
-                                                color: Colors.white.withOpacity(0.6),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                'Citations',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Colors.white.withOpacity(0.6),
-                                                  letterSpacing: 0.5,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          ...message.citations!.map(
-                                            (citation) => Padding(
-                                              padding: const EdgeInsets.only(bottom: 6),
-                                              child: Row(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Container(
-                                                    margin: const EdgeInsets.only(top: 6),
-                                                    width: 4,
-                                                    height: 4,
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.white.withOpacity(0.5),
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: Text(
-                                                      '[${citation.timestamp.toStringAsFixed(1)}s] ${citation.quote}',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.white.withOpacity(0.7),
-                                                        height: 1.4,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          );
-                        }).toList(),
+                        children: items
+                            .map((message) => _ChatMessageBubble(message: message))
+                            .toList(),
                       );
                     },
                     loading: () => const Center(
@@ -984,114 +877,7 @@ class _ChatTabState extends ConsumerState<_ChatTab> {
                     itemCount: items.length,
                     itemBuilder: (context, index) {
                       final message = items[index];
-                      final isUser = message.role == 'user';
-                      return Align(
-                        alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                        child: Container(
-                          constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.75,
-                          ),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: isUser
-                                ? const Color(0xFF6366F1)
-                                : const Color(0xFF1E1E1E),
-                            borderRadius: BorderRadius.only(
-                              topLeft: const Radius.circular(16),
-                              topRight: const Radius.circular(16),
-                              bottomLeft: Radius.circular(isUser ? 16 : 4),
-                              bottomRight: Radius.circular(isUser ? 4 : 16),
-                            ),
-                            border: isUser
-                                ? null
-                                : Border.all(
-                                    color: Colors.white.withOpacity(0.05),
-                                  ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                message.content,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  height: 1.5,
-                                  color: isUser
-                                      ? Colors.white
-                                      : Colors.white.withOpacity(0.9),
-                                  letterSpacing: 0.25,
-                                ),
-                              ),
-                              if (message.citations != null && message.citations!.isNotEmpty) ...[
-                                const SizedBox(height: 12),
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.format_quote_rounded,
-                                            size: 14,
-                                            color: Colors.white.withOpacity(0.6),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            'Citations',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.white.withOpacity(0.6),
-                                              letterSpacing: 0.5,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      ...message.citations!.map(
-                                        (citation) => Padding(
-                                          padding: const EdgeInsets.only(bottom: 6),
-                                          child: Row(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Container(
-                                                margin: const EdgeInsets.only(top: 6),
-                                                width: 4,
-                                                height: 4,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white.withOpacity(0.5),
-                                                  shape: BoxShape.circle,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: Text(
-                                                  '[${citation.timestamp.toStringAsFixed(1)}s] ${citation.quote}',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.white.withOpacity(0.7),
-                                                    height: 1.4,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      );
+                      return _ChatMessageBubble(message: message);
                     },
                   ),
             loading: () => const Center(
@@ -1202,6 +988,233 @@ class _ChatTabState extends ConsumerState<_ChatTab> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ChatMessageBubble extends StatelessWidget {
+  const _ChatMessageBubble({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final isUser = message.role == 'user';
+    final bubbleColor = isUser ? const Color(0xFF6366F1) : const Color(0xFF1E1E1E);
+
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: bubbleColor,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isUser ? 16 : 4),
+            bottomRight: Radius.circular(isUser ? 4 : 16),
+          ),
+          border: isUser
+              ? null
+              : Border.all(
+                  color: Colors.white.withOpacity(0.05),
+                ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ChatMessageContent(message: message, isUser: isUser),
+            if (!message.isThinking && message.citations != null && message.citations!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.format_quote_rounded,
+                          size: 14,
+                          color: Colors.white.withOpacity(0.6),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Citations',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withOpacity(0.6),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ...message.citations!.map(
+                      (citation) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.only(top: 6),
+                              width: 4,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.5),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '[${citation.timestamp.toStringAsFixed(1)}s] ${citation.quote}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white.withOpacity(0.7),
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatMessageContent extends StatelessWidget {
+  const _ChatMessageContent({required this.message, required this.isUser});
+
+  final ChatMessage message;
+  final bool isUser;
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isUser ? Colors.white : Colors.white.withOpacity(0.9);
+
+    if (message.isThinking) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: isUser ? Colors.white : const Color(0xFF6366F1),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Thinking...',
+            style: TextStyle(
+              fontSize: 14,
+              fontStyle: FontStyle.italic,
+              color: textColor.withOpacity(isUser ? 1 : 0.85),
+              letterSpacing: 0.25,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final sanitized = message.content.trim();
+    if (sanitized.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final paragraphs = sanitized.split(RegExp(r'\n\s*\n'));
+    final style = TextStyle(
+      fontSize: 15,
+      height: 1.5,
+      color: textColor,
+      letterSpacing: 0.25,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var index = 0; index < paragraphs.length; index++) ...[
+          _FormattedParagraph(
+            text: paragraphs[index],
+            style: style,
+            isUser: isUser,
+          ),
+          if (index != paragraphs.length - 1) const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+}
+
+class _FormattedParagraph extends StatelessWidget {
+  const _FormattedParagraph({required this.text, required this.style, required this.isUser});
+
+  final String text;
+  final TextStyle style;
+  final bool isUser;
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final lines = trimmed.split('\n');
+    final bulletPattern = RegExp(r'^[-*•]\s+');
+    final bulletLines = lines.where((line) => line.trim().isNotEmpty).toList();
+    final isBulletList =
+        !isUser && bulletLines.isNotEmpty && bulletLines.every((line) => bulletPattern.hasMatch(line.trim()));
+
+    if (isBulletList) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < bulletLines.length; i++) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '•',
+                  style: style.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    bulletLines[i].trim().replaceFirst(bulletPattern, ''),
+                    style: style,
+                  ),
+                ),
+              ],
+            ),
+            if (i != bulletLines.length - 1) const SizedBox(height: 6),
+          ],
+        ],
+      );
+    }
+
+    return Text(
+      trimmed,
+      style: style,
     );
   }
 }

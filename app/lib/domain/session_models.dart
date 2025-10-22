@@ -134,12 +134,19 @@ class SessionDetail {
 }
 
 class ChatMessage {
-  ChatMessage({required this.role, required this.content, required this.createdAt, this.citations});
+  ChatMessage({
+    required this.role,
+    required this.content,
+    required this.createdAt,
+    this.citations,
+    this.isThinking = false,
+  });
 
   final String role;
   final String content;
   final DateTime createdAt;
   final List<ChatCitation>? citations;
+  final bool isThinking;
 }
 
 class ChatResponse {

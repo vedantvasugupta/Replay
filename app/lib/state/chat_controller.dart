@@ -24,7 +24,13 @@ class ChatController extends StateNotifier<AsyncValue<List<ChatMessage>>> {
     _sending = true;
     final current = state.value ?? [];
     final userMessage = ChatMessage(role: 'user', content: message, createdAt: DateTime.now());
-    state = AsyncValue.data([...current, userMessage]);
+    final thinkingMessage = ChatMessage(
+      role: 'assistant',
+      content: '',
+      createdAt: DateTime.now(),
+      isThinking: true,
+    );
+    state = AsyncValue.data([...current, userMessage, thinkingMessage]);
     try {
       final response = await _repository.sendChat(_sessionId, message);
       final assistant = ChatMessage(
@@ -33,9 +39,25 @@ class ChatController extends StateNotifier<AsyncValue<List<ChatMessage>>> {
         citations: response.citations,
         createdAt: DateTime.now(),
       );
-      state = AsyncValue.data([...state.value!, assistant]);
+      final messages = [...(state.value ?? [])];
+      final placeholderIndex = messages.lastIndexWhere((msg) => msg.isThinking && msg.role == 'assistant');
+      if (placeholderIndex != -1) {
+        messages[placeholderIndex] = assistant;
+      } else {
+        messages.add(assistant);
+      }
+      state = AsyncValue.data(messages);
     } catch (error, stack) {
-      state = AsyncValue.error(error, stack);
+      final messages = state.value ?? [];
+      final cleaned = messages.where((msg) => !(msg.isThinking && msg.role == 'assistant')).toList();
+      state = AsyncValue.data([
+        ...cleaned,
+        ChatMessage(
+          role: 'assistant',
+          content: 'Sorry, I ran into a problem answering that. Please try again.',
+          createdAt: DateTime.now(),
+        ),
+      ]);
     } finally {
       _sending = false;
     }

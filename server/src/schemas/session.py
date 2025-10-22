@@ -15,9 +15,9 @@ class SessionListItem(CamelModel):
 
 
 class TranscriptSegment(CamelModel):
-    start: float
-    end: float
+    speaker: str
     text: str
+    start_time: str
 
 
 class TranscriptRead(CamelModel):

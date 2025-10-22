@@ -6,6 +6,7 @@ import '../features/auth/sign_in_screen.dart';
 import '../features/auth/sign_up_screen.dart';
 import '../features/main/main_screen.dart';
 import '../features/session_detail/session_detail_screen.dart';
+import '../features/settings/settings_screen.dart';
 import '../state/auth_state.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -49,6 +50,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           final id = int.parse(state.pathParameters['id']!);
           return SessionDetailScreen(sessionId: id);
         },
+      ),
+      GoRoute(
+        path: '/settings',
+        name: 'settings',
+        builder: (context, state) => const SettingsScreen(),
       ),
     ],
   );

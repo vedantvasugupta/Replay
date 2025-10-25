@@ -76,6 +76,7 @@ class RecordingScreen extends ConsumerWidget {
       case RecorderStatus.error:
         return MicButtonState.idle;
       case RecorderStatus.recording:
+      case RecorderStatus.paused:
         return MicButtonState.recording;
       case RecorderStatus.uploading:
         return MicButtonState.uploading;
@@ -88,6 +89,8 @@ class RecordingScreen extends ConsumerWidget {
         return 'Tap to start recording';
       case RecorderStatus.recording:
         return 'Recording... Tap to stop';
+      case RecorderStatus.paused:
+        return 'Recording paused (auto-resuming)';
       case RecorderStatus.uploading:
         return 'Uploading recording...';
       case RecorderStatus.error:

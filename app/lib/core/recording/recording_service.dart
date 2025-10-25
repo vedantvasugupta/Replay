@@ -18,6 +18,8 @@ class RecordingResult {
 abstract class IRecordingService {
   Future<bool> canRecord();
   Future<void> start();
+  Future<void> pause();
+  Future<void> resume();
   Future<RecordingResult?> stop();
   Future<void> cancel();
 }
@@ -190,6 +192,16 @@ class RecordingService implements IRecordingService {
       _recordConfig(),
       path: path,
     );
+  }
+
+  @override
+  Future<void> pause() async {
+    await _recorder.pause();
+  }
+
+  @override
+  Future<void> resume() async {
+    await _recorder.resume();
   }
 
   @override

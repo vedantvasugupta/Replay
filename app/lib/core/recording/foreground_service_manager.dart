@@ -65,9 +65,13 @@ class ForegroundServiceManager {
   static Future<void> updateNotification(Duration elapsed) async {
     if (!_isRunning || kIsWeb) return;
 
-    final minutes = elapsed.inMinutes;
+    final hours = elapsed.inHours;
+    final minutes = elapsed.inMinutes.remainder(60);
     final seconds = elapsed.inSeconds % 60;
-    final timeString = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+
+    final timeString = hours > 0
+        ? '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}'
+        : '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
 
     await FlutterForegroundTask.updateService(
       notificationTitle: 'Recording in progress',

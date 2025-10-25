@@ -149,10 +149,16 @@ class _TimerDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+
+    final timeString = hours > 0
+        ? '${hours.toString().padLeft(2, '0')}:$minutes:$seconds'
+        : '$minutes:$seconds';
+
     return Text(
-      '$minutes:$seconds',
+      timeString,
       style: const TextStyle(
         fontSize: 64,
         fontWeight: FontWeight.w300,

@@ -81,24 +81,35 @@ Important: Return ONLY valid JSON, no markdown formatting. If only one speaker i
         try:
             # Upload file to Gemini (no memory spike - streamed upload)
             file_size_mb = audio_path.stat().st_size / (1024 * 1024)
-            logger.info(f"Uploading {file_size_mb:.1f}MB audio file to Gemini File API: {audio_path.name}")
+            logger.info(f"📤 [UPLOAD START] Uploading {file_size_mb:.1f}MB audio file to Gemini File API: {audio_path.name}")
 
+            import time
+            upload_start = time.time()
             uploaded_file = genai.upload_file(path=str(audio_path), mime_type=mime_type)
-            logger.info(f"File uploaded successfully: {uploaded_file.name} (URI: {uploaded_file.uri})")
+            upload_duration = time.time() - upload_start
+            logger.info(f"✅ [UPLOAD COMPLETE] File uploaded in {upload_duration:.1f}s: {uploaded_file.name}")
+            logger.info(f"📝 [UPLOAD INFO] URI: {uploaded_file.uri}, State: {uploaded_file.state.name}")
 
             # Wait for file to be processed by Gemini
-            import time
+            wait_start = time.time()
+            check_count = 0
             while uploaded_file.state.name == "PROCESSING":
-                logger.info("Waiting for Gemini to process uploaded file...")
-                time.sleep(2)
+                check_count += 1
+                elapsed = time.time() - wait_start
+                logger.info(f"⏳ [PROCESSING] Waiting for Gemini to process file... (check #{check_count}, {elapsed:.1f}s elapsed)")
+                time.sleep(5)  # Check every 5 seconds
                 uploaded_file = genai.get_file(uploaded_file.name)
 
             if uploaded_file.state.name == "FAILED":
+                logger.error(f"❌ [PROCESSING FAILED] Gemini file processing failed: {uploaded_file.state}")
                 raise Exception(f"Gemini file processing failed: {uploaded_file.state}")
 
-            logger.info(f"File ready for transcription: {uploaded_file.name}")
+            wait_duration = time.time() - wait_start
+            logger.info(f"✅ [PROCESSING COMPLETE] File ready for transcription in {wait_duration:.1f}s: {uploaded_file.name}")
 
             # Generate content using the uploaded file reference
+            logger.info(f"🤖 [GENERATION START] Requesting transcription and analysis from {self.model}...")
+            gen_start = time.time()
             model = genai.GenerativeModel(self.model)
             response = model.generate_content(
                 [uploaded_file, prompt],
@@ -107,28 +118,36 @@ Important: Return ONLY valid JSON, no markdown formatting. If only one speaker i
                 ),
                 request_options={"timeout": 600}  # 10 minutes for generation
             )
+            gen_duration = time.time() - gen_start
+            logger.info(f"✅ [GENERATION COMPLETE] Transcription received in {gen_duration:.1f}s")
 
             text = response.text
+            logger.info(f"📊 [RESPONSE SIZE] Received {len(text)} characters of JSON response")
 
         finally:
             # Clean up uploaded file
             if uploaded_file:
                 try:
-                    logger.info(f"Deleting uploaded file: {uploaded_file.name}")
+                    logger.info(f"🗑️ [CLEANUP] Deleting uploaded file: {uploaded_file.name}")
                     genai.delete_file(uploaded_file.name)
+                    logger.info(f"✅ [CLEANUP COMPLETE] File deleted successfully")
                 except Exception as e:
-                    logger.warning(f"Failed to delete uploaded file {uploaded_file.name}: {e}")
+                    logger.warning(f"⚠️ [CLEANUP FAILED] Failed to delete uploaded file {uploaded_file.name}: {e}")
 
         # Parse JSON response
+        logger.info(f"🔍 [JSON PARSE START] Parsing Gemini response...")
         try:
             import json
             result = json.loads(text)
+            logger.info(f"✅ [JSON PARSE SUCCESS] Response parsed successfully")
 
             # Extract speaker information
             speakers = result.get("speakers", [])
             utterances = result.get("utterances", [])
+            logger.info(f"👥 [SPEAKERS] Found {len(speakers)} speakers and {len(utterances)} utterances")
 
             # Build segments from utterances if available with backward-compatible format
+            logger.info(f"🔨 [SEGMENTS BUILD] Building segments from utterances...")
             segments = []
             if utterances:
                 total_duration = max(30.0, len(result.get("transcript", text).split()) / 2.0)
@@ -146,25 +165,35 @@ Important: Return ONLY valid JSON, no markdown formatting. If only one speaker i
                         "end": end_time,
                         "start_time": utterance.get("start_time", f"{int(start_time)}s"),
                     })
+                logger.info(f"✅ [SEGMENTS COMPLETE] Built {len(segments)} segments with timestamps")
             else:
                 # Fallback to single segment
+                logger.warning(f"⚠️ [SEGMENTS FALLBACK] No utterances found, using fallback single segment")
                 segments = [{"start": 0.0, "end": max(30.0, len(result.get("transcript", text).split()) / 2.0), "text": result.get("transcript", text)}]
+
+            title = result.get("title", "Untitled Recording")
+            summary_text = result.get("summary", "")
+            action_items = result.get("action_items", [])
+
+            logger.info(f"📋 [RESULT SUMMARY] Title: '{title}', Summary: {len(summary_text)} chars, Actions: {len(action_items)} items")
+            logger.info(f"🎉 [TRANSCRIBE SUCCESS] All processing complete for {audio_path.name}")
 
             return {
                 "text": result.get("transcript", text),
                 "segments": segments,
                 "speakers": speakers,
-                "title": result.get("title", "Untitled Recording"),
+                "title": title,
                 "summary": {
-                    "summary": result.get("summary", ""),
-                    "action_items": result.get("action_items", []),
+                    "summary": summary_text,
+                    "action_items": action_items,
                     "timeline": result.get("timeline", []),
                     "decisions": result.get("decisions", []),
                 },
             }
         except Exception as e:
             # Fallback if JSON parsing fails
-            print(f"[GeminiService] Failed to parse JSON response: {e}")
+            logger.error(f"❌ [JSON PARSE FAILED] Failed to parse JSON response: {e}")
+            logger.warning(f"⚠️ [FALLBACK] Using fallback response structure")
             return {
                 "text": text,
                 "segments": [{"start": 0.0, "end": max(30.0, len(text.split()) / 2.0), "text": text}],

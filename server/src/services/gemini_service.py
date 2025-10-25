@@ -110,14 +110,23 @@ Important: Return ONLY valid JSON, no markdown formatting. If only one speaker i
             speakers = result.get("speakers", [])
             utterances = result.get("utterances", [])
 
-            # Build segments from utterances if available
+            # Build segments from utterances if available with backward-compatible format
             segments = []
             if utterances:
-                for utterance in utterances:
+                total_duration = max(30.0, len(result.get("transcript", text).split()) / 2.0)
+                segment_duration = total_duration / max(len(utterances), 1)
+
+                for idx, utterance in enumerate(utterances):
+                    # Calculate approximate numeric timestamps for backward compatibility
+                    start_time = idx * segment_duration
+                    end_time = (idx + 1) * segment_duration
+
                     segments.append({
                         "speaker": utterance.get("speaker", "Unknown"),
                         "text": utterance.get("text", ""),
-                        "start_time": utterance.get("start_time", "unknown"),
+                        "start": start_time,
+                        "end": end_time,
+                        "start_time": utterance.get("start_time", f"{int(start_time)}s"),
                     })
             else:
                 # Fallback to single segment

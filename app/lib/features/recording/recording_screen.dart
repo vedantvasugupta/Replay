@@ -123,6 +123,7 @@ class RecordingScreen extends ConsumerWidget {
         }
         break;
       case RecorderStatus.recording:
+      case RecorderStatus.paused:
         await recorderNotifier.stop();
         await sessionNotifier.refresh();
         if (context.mounted) {

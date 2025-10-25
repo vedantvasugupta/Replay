@@ -38,7 +38,7 @@ final recorderControllerProvider = StateNotifierProvider<RecorderController, Rec
 });
 
 class RecorderController extends StateNotifier<RecorderState> with WidgetsBindingObserver {
-  RecorderController(this._uploadManager, this _recordingService)
+  RecorderController(this._uploadManager, this._recordingService)
       : super(const RecorderState(status: RecorderStatus.idle, elapsed: Duration.zero)) {
     _initializeForegroundService();
     _initializeAudioSession();

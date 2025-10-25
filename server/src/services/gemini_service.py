@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-import base64
+import logging
 from pathlib import Path
 from typing import Any
 
+import google.generativeai as genai
 import httpx
 
 from ..core.config import get_settings
+
+logger = logging.getLogger("uvicorn")
 
 
 class GeminiService:
@@ -20,8 +23,12 @@ class GeminiService:
         self.api_key = settings.api_key
         self._endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
 
+        # Configure the SDK with API key
+        if self.api_key:
+            genai.configure(api_key=self.api_key)
+
     async def transcribe_and_analyze(self, audio_path: Path, mime_type: str) -> dict[str, Any]:
-        """Transcribe audio and generate summary + title in a single API call."""
+        """Transcribe audio and generate summary + title in a single API call using File API."""
         if not self.api_key:
             text = f"Transcription placeholder for {audio_path.name}. Configure GEMINI_API_KEY for live transcription."
             return {
@@ -35,8 +42,6 @@ class GeminiService:
                     "decisions": [],
                 },
             }
-
-        data = audio_path.read_bytes()
 
         # Combined prompt for transcription, summary, and title generation with speaker diarization
         prompt = """Transcribe this meeting audio with speaker identification, then analyze it.
@@ -72,34 +77,47 @@ Return your response in the following JSON format:
 
 Important: Return ONLY valid JSON, no markdown formatting. If only one speaker is detected, still use the Speaker 1 format."""
 
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {
-                            "inline_data": {
-                                "mime_type": mime_type,
-                                "data": base64.b64encode(data).decode("utf-8"),
-                            }
-                        },
-                        {"text": prompt},
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "response_mime_type": "application/json",
-            },
-        }
+        uploaded_file = None
+        try:
+            # Upload file to Gemini (no memory spike - streamed upload)
+            file_size_mb = audio_path.stat().st_size / (1024 * 1024)
+            logger.info(f"Uploading {file_size_mb:.1f}MB audio file to Gemini File API: {audio_path.name}")
 
-        # Increase timeout for potentially long audio files
-        timeout = max(120, audio_path.stat().st_size // (1024 * 50))  # 120s base + 1s per 50KB
+            uploaded_file = genai.upload_file(path=str(audio_path), mime_type=mime_type)
+            logger.info(f"File uploaded successfully: {uploaded_file.name} (URI: {uploaded_file.uri})")
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(self._endpoint, params={"key": self.api_key}, json=payload)
-            response.raise_for_status()
-            body = response.json()
+            # Wait for file to be processed by Gemini
+            import time
+            while uploaded_file.state.name == "PROCESSING":
+                logger.info("Waiting for Gemini to process uploaded file...")
+                time.sleep(2)
+                uploaded_file = genai.get_file(uploaded_file.name)
 
-        text = self._extract_text(body)
+            if uploaded_file.state.name == "FAILED":
+                raise Exception(f"Gemini file processing failed: {uploaded_file.state}")
+
+            logger.info(f"File ready for transcription: {uploaded_file.name}")
+
+            # Generate content using the uploaded file reference
+            model = genai.GenerativeModel(self.model)
+            response = model.generate_content(
+                [uploaded_file, prompt],
+                generation_config=genai.GenerationConfig(
+                    response_mime_type="application/json",
+                ),
+                request_options={"timeout": 600}  # 10 minutes for generation
+            )
+
+            text = response.text
+
+        finally:
+            # Clean up uploaded file
+            if uploaded_file:
+                try:
+                    logger.info(f"Deleting uploaded file: {uploaded_file.name}")
+                    genai.delete_file(uploaded_file.name)
+                except Exception as e:
+                    logger.warning(f"Failed to delete uploaded file {uploaded_file.name}: {e}")
 
         # Parse JSON response
         try:

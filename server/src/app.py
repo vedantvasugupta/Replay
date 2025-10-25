@@ -102,15 +102,26 @@ def create_app() -> FastAPI:
             payload = json.loads(job.payload)
             session_id = payload["session_id"]
             logger.info(f"Processing job {job.id} for session {session_id}")
+
+            # Get session to determine timeout based on duration
+            session_obj = await db.get(Session, session_id)
+            if session_obj:
+                # Dynamic timeout: base 10min + 1min per 5min of audio (max 2 hours)
+                # For 3-hour recording: 10 + (180/5) = 46 minutes
+                timeout_minutes = min(120, 10 + (session_obj.duration_sec / 300))
+                timeout_seconds = timeout_minutes * 60
+                logger.info(f"Job {job.id} timeout set to {timeout_minutes:.1f} minutes for {session_obj.duration_sec}s recording")
+            else:
+                timeout_seconds = 3600.0  # Default 1 hour if session not found
+
             try:
-                # Add 10-minute timeout to prevent workers from getting stuck
                 await asyncio.wait_for(
                     state.transcription_service.process_session(db, session_id),
-                    timeout=600.0  # 10 minutes
+                    timeout=timeout_seconds
                 )
                 logger.info(f"✅ Job {job.id} completed successfully")
             except asyncio.TimeoutError:
-                logger.error(f"❌ Job {job.id} timed out after 10 minutes")
+                logger.error(f"❌ Job {job.id} timed out after {timeout_seconds/60:.1f} minutes")
                 session_obj = await db.get(Session, session_id)
                 if session_obj:
                     session_obj.status = SessionStatus.failed

@@ -76,6 +76,14 @@ class StorageService:
         path = self._normalize_asset_path(asset)
         path.parent.mkdir(parents=True, exist_ok=True)
         size = 0
+
+        # Ensure we're writing from the beginning of the uploaded file.
+        try:
+            await file.seek(0)
+        except Exception:
+            # Some upload backends do not support seek; continue regardless.
+            pass
+
         with path.open("wb") as outfile:
             while True:
                 chunk = await file.read(1024 * 1024)

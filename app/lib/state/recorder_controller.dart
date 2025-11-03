@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/recording/foreground_service_manager.dart';
 import '../core/recording/recording_service.dart';
+import '../core/uploads/title_utils.dart';
 import '../core/uploads/upload_manager.dart';
 
 enum RecorderStatus { idle, recording, paused, uploading, error }
@@ -180,12 +181,13 @@ class RecorderController extends StateNotifier<RecorderState> with WidgetsBindin
         state = state.copyWith(status: RecorderStatus.idle, elapsed: Duration.zero);
         return;
       }
+      final resolvedTitle = deriveUploadTitle(title);
       final upload = PendingUpload(
         filePath: result.filePath,
         durationSec: result.duration.inSeconds.clamp(1, 24 * 3600).toInt(),
         mime: _mimeForPlatform(),
         createdAt: DateTime.now(),
-        title: title,
+        title: resolvedTitle,
       );
       await _uploadManager.enqueueAndUpload(upload);
       state = state.copyWith(status: RecorderStatus.idle, elapsed: Duration.zero);

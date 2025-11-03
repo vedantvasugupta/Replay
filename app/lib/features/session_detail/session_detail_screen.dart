@@ -5,6 +5,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../domain/session_models.dart';
 import '../../state/chat_controller.dart';
 import '../../state/session_detail_controller.dart';
+import '../../state/session_list_controller.dart';
 
 class SessionDetailScreen extends ConsumerStatefulWidget {
   const SessionDetailScreen({required this.sessionId, super.key});
@@ -17,6 +18,7 @@ class SessionDetailScreen extends ConsumerStatefulWidget {
 
 class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
   bool _isEditingTitle = false;
+  bool _isSavingTitle = false;
   final _titleController = TextEditingController();
 
   @override
@@ -26,13 +28,62 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
   }
 
   Future<void> _updateTitle() async {
-    if (_titleController.text.trim().isEmpty) return;
+    final newTitle = _titleController.text.trim();
+    if (newTitle.isEmpty || _isSavingTitle) {
+      return;
+    }
 
-    // TODO: Call API to update title
-    // For now, just close edit mode
     setState(() {
-      _isEditingTitle = false;
+      _isSavingTitle = true;
     });
+
+    try {
+      await ref.read(sessionDetailControllerProvider(widget.sessionId).notifier).updateTitle(newTitle);
+      ref.read(sessionListControllerProvider.notifier).applyTitleUpdate(widget.sessionId, newTitle);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isEditingTitle = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Title updated'),
+          backgroundColor: const Color(0xFF1E1E1E),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update title: $error'),
+          backgroundColor: const Color(0xFFFF3B30),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingTitle = false;
+        });
+      } else {
+        _isSavingTitle = false;
+      }
+    }
   }
 
   @override
@@ -76,6 +127,7 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
                       child: TextField(
                         controller: _titleController,
                         autofocus: true,
+                        enabled: !_isSavingTitle,
                         style: const TextStyle(fontSize: 18),
                         decoration: const InputDecoration(
                           border: InputBorder.none,
@@ -84,17 +136,29 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
                         onSubmitted: (_) => _updateTitle(),
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.check, size: 20),
-                      onPressed: _updateTitle,
-                    ),
+                    if (_isSavingTitle)
+                      const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Padding(
+                          padding: EdgeInsets.all(2),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    else
+                      IconButton(
+                        icon: const Icon(Icons.check, size: 20),
+                        onPressed: _updateTitle,
+                      ),
                     IconButton(
                       icon: const Icon(Icons.close, size: 20),
-                      onPressed: () {
-                        setState(() {
-                          _isEditingTitle = false;
-                        });
-                      },
+                      onPressed: _isSavingTitle
+                          ? null
+                          : () {
+                              setState(() {
+                                _isEditingTitle = false;
+                              });
+                            },
                     ),
                   ],
                 );

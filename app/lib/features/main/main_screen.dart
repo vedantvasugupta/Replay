@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/uploads/audio_picker_service.dart';
+import '../../core/uploads/title_utils.dart';
 import '../../core/uploads/upload_manager.dart';
 import '../../state/auth_state.dart';
 import '../../state/session_list_controller.dart';
@@ -207,12 +208,13 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
       // Create pending upload and enqueue
       final fileName = audioPicker.getDisplayName(result.file);
+      final titleCandidate = fileName.replaceAll(RegExp(r'\.[^.]*$'), '');
       final upload = PendingUpload(
         filePath: result.file.path,
         durationSec: result.durationSec ?? 0,
         mime: result.mimeType,
         createdAt: DateTime.now(),
-        title: fileName.replaceAll(RegExp(r'\.[^.]*$'), ''), // Remove file extension for title
+        title: deriveUploadTitle(titleCandidate),
       );
 
       // Start upload in background (don't await)

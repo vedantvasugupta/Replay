@@ -45,4 +45,25 @@ class SessionListController extends StateNotifier<AsyncValue<List<SessionListIte
       rethrow;
     }
   }
+
+  void applyTitleUpdate(int sessionId, String title) {
+    final current = state.valueOrNull;
+    if (current == null) {
+      return;
+    }
+    final updated = current
+        .map(
+          (session) => session.id == sessionId
+              ? SessionListItem(
+                  id: session.id,
+                  status: session.status,
+                  createdAt: session.createdAt,
+                  durationSec: session.durationSec,
+                  title: title,
+                )
+              : session,
+        )
+        .toList();
+    state = AsyncValue.data(updated);
+  }
 }

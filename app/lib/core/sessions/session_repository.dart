@@ -60,15 +60,29 @@ class SessionRepository {
     required File file,
     required String mime,
   }) async {
+    print('[SessionRepository] Preparing to upload file: ${file.path}');
+    print('[SessionRepository] File size: ${await file.length()} bytes');
+    print('[SessionRepository] MIME type: $mime');
+    print('[SessionRepository] Asset ID: $assetId');
+
+    final multipartFile = await MultipartFile.fromFile(
+      file.path,
+      filename: file.uri.pathSegments.last,
+      contentType: MediaType.parse(mime),
+    );
+
+    print('[SessionRepository] MultipartFile created - filename: ${multipartFile.filename}, length: ${multipartFile.length}');
+
     final formData = FormData.fromMap({
       'assetId': assetId,
-      'file': await MultipartFile.fromFile(
-        file.path,
-        filename: file.uri.pathSegments.last,
-        contentType: MediaType.parse(mime),
-      ),
+      'file': multipartFile,
     });
+
+    print('[SessionRepository] Sending upload request...');
+
     await _client.post('/upload', data: formData, options: Options(contentType: 'multipart/form-data'));
+
+    print('[SessionRepository] Upload request completed');
   }
 
   Future<int> ingest({

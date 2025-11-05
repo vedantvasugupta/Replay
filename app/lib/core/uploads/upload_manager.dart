@@ -225,6 +225,19 @@ class UploadManager {
     }
 
     try {
+      // Validate file before upload
+      final file = File(updatedUpload.filePath);
+      if (!file.existsSync()) {
+        throw Exception('File does not exist: ${updatedUpload.filePath}');
+      }
+
+      final fileSize = await file.length();
+      print('[UploadManager] File validation - exists: true, size: $fileSize bytes');
+
+      if (fileSize == 0) {
+        throw Exception('File is empty (0 bytes): ${updatedUpload.filePath}');
+      }
+
       final allocation = await _repository.requestUpload(
         filename: File(updatedUpload.filePath).uri.pathSegments.last,
         mime: updatedUpload.mime,

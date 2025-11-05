@@ -27,7 +27,10 @@
       "Bash(railway whoami:*)",
       "Bash(git push:*)",
       "Bash(git ls-tree:*)",
-      "Bash(git check-ignore:*)"
+      "Bash(git check-ignore:*)",
+      "Bash(railway ssh:*)",
+      "Bash(curl:*)",
+      "Bash(sh)"
     ],
     "deny": [],
     "ask": []

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
 import 'core/uploads/upload_manager.dart';
+import 'core/sharing/share_handler_service.dart';
 import 'router/app_router.dart';
 
 class ReplayApp extends ConsumerStatefulWidget {
@@ -16,7 +17,18 @@ class _ReplayAppState extends ConsumerState<ReplayApp> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => ref.read(uploadManagerProvider).retryPending());
+    Future.microtask(() {
+      // Retry any pending uploads
+      ref.read(uploadManagerProvider).retryPending();
+      // Initialize share handler to receive shared audio files
+      ref.read(shareHandlerServiceProvider).initialize();
+    });
+  }
+
+  @override
+  void dispose() {
+    ref.read(shareHandlerServiceProvider).dispose();
+    super.dispose();
   }
 
   @override

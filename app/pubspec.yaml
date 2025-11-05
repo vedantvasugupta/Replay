@@ -27,6 +27,7 @@ dependencies:
   flutter_markdown: ^0.7.3
   device_info_plus: ^10.1.0
   audio_session: ^0.1.21
+  receive_sharing_intent: ^1.8.0
 
 dev_dependencies:
   flutter_test:

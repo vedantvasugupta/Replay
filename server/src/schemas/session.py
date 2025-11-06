@@ -15,9 +15,12 @@ class SessionListItem(CamelModel):
 
 
 class TranscriptSegment(CamelModel):
-    start: float
-    end: float
+    # Support both old format (start/end) and new format (speaker/start_time)
     text: str
+    speaker: str | None = None
+    start_time: str | None = None
+    start: float | None = None
+    end: float | None = None
 
 
 class TranscriptRead(CamelModel):

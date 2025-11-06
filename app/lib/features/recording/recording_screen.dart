@@ -76,6 +76,7 @@ class RecordingScreen extends ConsumerWidget {
       case RecorderStatus.error:
         return MicButtonState.idle;
       case RecorderStatus.recording:
+      case RecorderStatus.paused:
         return MicButtonState.recording;
       case RecorderStatus.uploading:
         return MicButtonState.uploading;
@@ -88,6 +89,8 @@ class RecordingScreen extends ConsumerWidget {
         return 'Tap to start recording';
       case RecorderStatus.recording:
         return 'Recording... Tap to stop';
+      case RecorderStatus.paused:
+        return 'Recording paused (auto-resuming)';
       case RecorderStatus.uploading:
         return 'Uploading recording...';
       case RecorderStatus.error:
@@ -120,6 +123,7 @@ class RecordingScreen extends ConsumerWidget {
         }
         break;
       case RecorderStatus.recording:
+      case RecorderStatus.paused:
         await recorderNotifier.stop();
         await sessionNotifier.refresh();
         if (context.mounted) {
@@ -149,10 +153,16 @@ class _TimerDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+
+    final timeString = hours > 0
+        ? '${hours.toString().padLeft(2, '0')}:$minutes:$seconds'
+        : '$minutes:$seconds';
+
     return Text(
-      '$minutes:$seconds',
+      timeString,
       style: const TextStyle(
         fontSize: 64,
         fontWeight: FontWeight.w300,

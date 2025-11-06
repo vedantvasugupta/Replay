@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import BinaryIO
@@ -11,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.config import get_settings
 from ..models.audio_asset import AudioAsset
 from ..models.user import User
+
+logger = logging.getLogger(__name__)
 
 
 class StorageService:
@@ -74,16 +77,38 @@ class StorageService:
 
     async def save_upload(self, asset: AudioAsset, file: UploadFile) -> int:
         path = self._normalize_asset_path(asset)
+        logger.info(f"[save_upload] Saving asset {asset.id} to {path}")
+        logger.info(f"[save_upload] File object: filename={file.filename}, content_type={file.content_type}")
+
         path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info(f"[save_upload] Created directory: {path.parent}")
+
         size = 0
+        chunks_read = 0
         with path.open("wb") as outfile:
             while True:
                 chunk = await file.read(1024 * 1024)
                 if not chunk:
+                    logger.info(f"[save_upload] No more chunks to read after {chunks_read} chunks")
                     break
                 outfile.write(chunk)
                 size += len(chunk)
+                chunks_read += 1
+                if chunks_read == 1:
+                    logger.info(f"[save_upload] First chunk size: {len(chunk)} bytes")
+
         await file.close()
+        logger.info(f"[save_upload] Wrote {size} bytes in {chunks_read} chunks to {path}")
+
+        # Verify the file was written
+        if path.exists():
+            actual_size = path.stat().st_size
+            logger.info(f"[save_upload] File exists on disk with size: {actual_size} bytes")
+            if actual_size != size:
+                logger.error(f"[save_upload] SIZE MISMATCH! Wrote {size} bytes but file is {actual_size} bytes")
+        else:
+            logger.error(f"[save_upload] File does not exist after write: {path}")
+
         return size
 
     async def update_asset_size(self, session: AsyncSession, asset: AudioAsset, size: int) -> AudioAsset:

@@ -67,12 +67,28 @@ class AuthService:
             logger.info("🔵 [AUTH_SERVICE] Verifying Google ID token with Google servers...")
             logger.info(f"🔵 [AUTH_SERVICE] Configured client IDs: {self.GOOGLE_CLIENT_IDS}")
 
-            # Verify the token
-            idinfo = google_id_token.verify_oauth2_token(
-                id_token,
-                requests.Request(),
-                # audience=self.GOOGLE_CLIENT_IDS[0] if self.GOOGLE_CLIENT_IDS else None
-            )
+            # Verify the token with audience validation
+            # Try each client ID until one works (supports multiple platforms)
+            idinfo = None
+            last_error = None
+
+            for client_id in self.GOOGLE_CLIENT_IDS:
+                try:
+                    idinfo = google_id_token.verify_oauth2_token(
+                        id_token,
+                        requests.Request(),
+                        audience=client_id
+                    )
+                    logger.info(f"✅ [AUTH_SERVICE] Token verified successfully with client ID: {client_id}")
+                    break
+                except ValueError as e:
+                    last_error = e
+                    logger.debug(f"🔵 [AUTH_SERVICE] Token verification failed for client ID {client_id}: {str(e)}")
+                    continue
+
+            if not idinfo:
+                logger.error(f"❌ [AUTH_SERVICE] Token verification failed for all client IDs. Last error: {last_error}")
+                raise ValueError(f"Invalid token: token audience does not match any configured client IDs")
 
             logger.info(f"✅ [AUTH_SERVICE] Token verified successfully!")
             logger.info(f"🔵 [AUTH_SERVICE] Token info - Email: {idinfo.get('email')}, Sub: {idinfo.get('sub')}, Issuer: {idinfo.get('iss')}, Audience: {idinfo.get('aud')}")

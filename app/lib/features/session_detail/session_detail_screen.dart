@@ -28,11 +28,21 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
   Future<void> _updateTitle() async {
     if (_titleController.text.trim().isEmpty) return;
 
-    // TODO: Call API to update title
-    // For now, just close edit mode
+    final newTitle = _titleController.text.trim();
     setState(() {
       _isEditingTitle = false;
     });
+
+    try {
+      final controller = ref.read(sessionDetailControllerProvider(widget.sessionId).notifier);
+      await controller.updateTitle(newTitle);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update title: $e')),
+        );
+      }
+    }
   }
 
   @override

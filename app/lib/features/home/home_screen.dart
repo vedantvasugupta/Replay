@@ -91,6 +91,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
 
+            // Pending uploads banner
+            _buildPendingUploadsBanner(ref),
+
             // Main recording area
             Expanded(
               child: Center(
@@ -297,12 +300,84 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  Widget _buildPendingUploadsBanner(WidgetRef ref) {
+    final uploadManager = ref.watch(uploadManagerProvider);
+    final pendingCount = uploadManager.pendingCount;
+
+    if (pendingCount == 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF9500).withOpacity(0.15),
+        border: Border.all(
+          color: const Color(0xFFFF9500).withOpacity(0.3),
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.cloud_upload_outlined,
+            color: const Color(0xFFFF9500),
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '$pendingCount recording${pendingCount > 1 ? 's' : ''} pending upload',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final recorderNotifier = ref.read(recorderControllerProvider.notifier);
+              await recorderNotifier.retryPending();
+
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text('Retrying $pendingCount upload${pendingCount > 1 ? 's' : ''}...'),
+                  backgroundColor: const Color(0xFF1E1E1E),
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              );
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFFF9500),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            child: const Text(
+              'Retry All',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   MicButtonState _getMicButtonState(RecorderStatus status) {
     switch (status) {
       case RecorderStatus.idle:
       case RecorderStatus.error:
         return MicButtonState.idle;
       case RecorderStatus.recording:
+      case RecorderStatus.paused:
         return MicButtonState.recording;
       case RecorderStatus.uploading:
         return MicButtonState.uploading;
@@ -315,6 +390,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return 'Tap to start recording';
       case RecorderStatus.recording:
         return 'Recording... Tap to stop';
+      case RecorderStatus.paused:
+        return 'Recording paused (auto-resuming)';
       case RecorderStatus.uploading:
         return 'Uploading recording...';
       case RecorderStatus.error:

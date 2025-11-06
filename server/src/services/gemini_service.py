@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-import base64
+import logging
 from pathlib import Path
 from typing import Any
 
+import google.generativeai as genai
 import httpx
 
 from ..core.config import get_settings
+
+logger = logging.getLogger("uvicorn")
 
 
 class GeminiService:
@@ -20,8 +23,18 @@ class GeminiService:
         self.api_key = settings.api_key
         self._endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
 
-    async def transcribe_and_analyze(self, audio_path: Path, mime_type: str) -> dict[str, Any]:
-        """Transcribe audio and generate summary + title in a single API call."""
+        # Configure the SDK with API key
+        if self.api_key:
+            genai.configure(api_key=self.api_key)
+
+    async def transcribe_and_analyze(self, audio_path: Path, mime_type: str, duration_sec: int = 0) -> dict[str, Any]:
+        """Transcribe audio and generate summary + title in a single API call using File API.
+
+        Args:
+            audio_path: Path to the audio file
+            mime_type: MIME type of the audio file
+            duration_sec: Duration of the recording in seconds (for timeout calculation)
+        """
         if not self.api_key:
             text = f"Transcription placeholder for {audio_path.name}. Configure GEMINI_API_KEY for live transcription."
             return {
@@ -35,8 +48,6 @@ class GeminiService:
                     "decisions": [],
                 },
             }
-
-        data = audio_path.read_bytes()
 
         # Combined prompt for transcription, summary, and title generation with speaker diarization
         prompt = """Transcribe this meeting audio with speaker identification, then analyze it.
@@ -72,72 +83,140 @@ Return your response in the following JSON format:
 
 Important: Return ONLY valid JSON, no markdown formatting. If only one speaker is detected, still use the Speaker 1 format."""
 
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {
-                            "inline_data": {
-                                "mime_type": mime_type,
-                                "data": base64.b64encode(data).decode("utf-8"),
-                            }
-                        },
-                        {"text": prompt},
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "response_mime_type": "application/json",
-            },
-        }
+        uploaded_file = None
+        try:
+            # Upload file to Gemini (no memory spike - streamed upload)
+            file_size_mb = audio_path.stat().st_size / (1024 * 1024)
+            logger.info(f"📤 [UPLOAD START] Uploading {file_size_mb:.1f}MB audio file to Gemini File API: {audio_path.name}")
 
-        # Increase timeout for potentially long audio files
-        timeout = max(120, audio_path.stat().st_size // (1024 * 50))  # 120s base + 1s per 50KB
+            import time
+            upload_start = time.time()
+            uploaded_file = genai.upload_file(path=str(audio_path), mime_type=mime_type)
+            upload_duration = time.time() - upload_start
+            logger.info(f"✅ [UPLOAD COMPLETE] File uploaded in {upload_duration:.1f}s: {uploaded_file.name}")
+            logger.info(f"📝 [UPLOAD INFO] URI: {uploaded_file.uri}, State: {uploaded_file.state.name}")
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(self._endpoint, params={"key": self.api_key}, json=payload)
-            response.raise_for_status()
-            body = response.json()
+            # Wait for file to be processed by Gemini
+            import asyncio
+            wait_start = time.time()
+            check_count = 0
+            while uploaded_file.state.name == "PROCESSING":
+                check_count += 1
+                elapsed = time.time() - wait_start
+                logger.info(f"⏳ [PROCESSING] Waiting for Gemini to process file... (check #{check_count}, {elapsed:.1f}s elapsed)")
+                await asyncio.sleep(5)  # Check every 5 seconds - use async sleep to avoid greenlet issues
+                uploaded_file = genai.get_file(uploaded_file.name)
 
-        text = self._extract_text(body)
+            if uploaded_file.state.name == "FAILED":
+                logger.error(f"❌ [PROCESSING FAILED] Gemini file processing failed: {uploaded_file.state}")
+                raise Exception(f"Gemini file processing failed: {uploaded_file.state}")
+
+            wait_duration = time.time() - wait_start
+            logger.info(f"✅ [PROCESSING COMPLETE] File ready for transcription in {wait_duration:.1f}s: {uploaded_file.name}")
+
+            # Generate content using the uploaded file reference
+            # Calculate dynamic timeout based on recording duration
+            # Base: 10 minutes + 1 minute per 5 minutes of audio (max 60 minutes for API call)
+            # Example: 82-min recording = 10 + (82/5) = 26.4 minutes
+            api_timeout_minutes = min(60, 10 + (duration_sec / 300)) if duration_sec > 0 else 10
+            api_timeout_seconds = int(api_timeout_minutes * 60)
+            logger.info(f"🤖 [GENERATION START] Requesting transcription and analysis from {self.model}...")
+            logger.info(f"⏱️ [TIMEOUT] API timeout set to {api_timeout_minutes:.1f} minutes ({api_timeout_seconds}s) for {duration_sec}s recording")
+            gen_start = time.time()
+            model = genai.GenerativeModel(self.model)
+            response = model.generate_content(
+                [uploaded_file, prompt],
+                generation_config=genai.GenerationConfig(
+                    response_mime_type="application/json",
+                ),
+                request_options={"timeout": api_timeout_seconds}
+            )
+            gen_duration = time.time() - gen_start
+            logger.info(f"✅ [GENERATION COMPLETE] Transcription received in {gen_duration:.1f}s")
+
+            text = response.text
+            logger.info(f"📊 [RESPONSE SIZE] Received {len(text)} characters of JSON response")
+
+        finally:
+            # Clean up uploaded file
+            if uploaded_file:
+                try:
+                    logger.info(f"🗑️ [CLEANUP] Deleting uploaded file: {uploaded_file.name}")
+                    genai.delete_file(uploaded_file.name)
+                    logger.info(f"✅ [CLEANUP COMPLETE] File deleted successfully")
+                except Exception as e:
+                    logger.warning(f"⚠️ [CLEANUP FAILED] Failed to delete uploaded file {uploaded_file.name}: {e}")
 
         # Parse JSON response
+        logger.info(f"🔍 [JSON PARSE START] Parsing Gemini response...")
         try:
             import json
-            result = json.loads(text)
+            import re
+
+            # Sanitize control characters from JSON response
+            # Remove control characters except for \n, \r, \t
+            sanitized_text = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f-\x9f]', '', text)
+
+            if sanitized_text != text:
+                removed_count = len(text) - len(sanitized_text)
+                logger.warning(f"⚠️ [JSON SANITIZE] Removed {removed_count} invalid control characters from response")
+
+            result = json.loads(sanitized_text)
+            logger.info(f"✅ [JSON PARSE SUCCESS] Response parsed successfully")
 
             # Extract speaker information
             speakers = result.get("speakers", [])
             utterances = result.get("utterances", [])
+            logger.info(f"👥 [SPEAKERS] Found {len(speakers)} speakers and {len(utterances)} utterances")
 
-            # Build segments from utterances if available
+            # Build segments from utterances if available with backward-compatible format
+            logger.info(f"🔨 [SEGMENTS BUILD] Building segments from utterances...")
             segments = []
             if utterances:
-                for utterance in utterances:
+                total_duration = max(30.0, len(result.get("transcript", text).split()) / 2.0)
+                segment_duration = total_duration / max(len(utterances), 1)
+
+                for idx, utterance in enumerate(utterances):
+                    # Calculate approximate numeric timestamps for backward compatibility
+                    start_time = idx * segment_duration
+                    end_time = (idx + 1) * segment_duration
+
                     segments.append({
                         "speaker": utterance.get("speaker", "Unknown"),
                         "text": utterance.get("text", ""),
-                        "start_time": utterance.get("start_time", "unknown"),
+                        "start": start_time,
+                        "end": end_time,
+                        "start_time": utterance.get("start_time", f"{int(start_time)}s"),
                     })
+                logger.info(f"✅ [SEGMENTS COMPLETE] Built {len(segments)} segments with timestamps")
             else:
                 # Fallback to single segment
+                logger.warning(f"⚠️ [SEGMENTS FALLBACK] No utterances found, using fallback single segment")
                 segments = [{"start": 0.0, "end": max(30.0, len(result.get("transcript", text).split()) / 2.0), "text": result.get("transcript", text)}]
+
+            title = result.get("title", "Untitled Recording")
+            summary_text = result.get("summary", "")
+            action_items = result.get("action_items", [])
+
+            logger.info(f"📋 [RESULT SUMMARY] Title: '{title}', Summary: {len(summary_text)} chars, Actions: {len(action_items)} items")
+            logger.info(f"🎉 [TRANSCRIBE SUCCESS] All processing complete for {audio_path.name}")
 
             return {
                 "text": result.get("transcript", text),
                 "segments": segments,
                 "speakers": speakers,
-                "title": result.get("title", "Untitled Recording"),
+                "title": title,
                 "summary": {
-                    "summary": result.get("summary", ""),
-                    "action_items": result.get("action_items", []),
+                    "summary": summary_text,
+                    "action_items": action_items,
                     "timeline": result.get("timeline", []),
                     "decisions": result.get("decisions", []),
                 },
             }
         except Exception as e:
             # Fallback if JSON parsing fails
-            print(f"[GeminiService] Failed to parse JSON response: {e}")
+            logger.error(f"❌ [JSON PARSE FAILED] Failed to parse JSON response: {e}")
+            logger.warning(f"⚠️ [FALLBACK] Using fallback response structure")
             return {
                 "text": text,
                 "segments": [{"start": 0.0, "end": max(30.0, len(text.split()) / 2.0), "text": text}],

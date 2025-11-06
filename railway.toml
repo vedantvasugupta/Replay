@@ -1,5 +1,8 @@
+# Railway configuration for monorepo
+# This file must be at the repository root
 [build]
 builder = "nixpacks"
+rootDirectory = "server"
 
 [deploy]
 startCommand = "python scripts/run_migrations.py && uvicorn src.app:app --host 0.0.0.0 --port $PORT"

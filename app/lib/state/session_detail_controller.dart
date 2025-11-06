@@ -40,6 +40,17 @@ class SessionDetailController extends StateNotifier<AsyncValue<SessionDetail>> {
 
   Future<void> refresh() => load();
 
+  Future<void> updateTitle(String newTitle) async {
+    try {
+      await _repository.updateSessionTitle(_sessionId, newTitle);
+      // Refresh the session detail to get the updated title
+      await load();
+    } catch (error, stack) {
+      state = AsyncValue.error(error, stack);
+      rethrow;
+    }
+  }
+
   @override
   void dispose() {
     _poller?.cancel();

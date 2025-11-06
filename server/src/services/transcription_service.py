@@ -59,7 +59,8 @@ class TranscriptionService:
         # Use combined API call for efficiency (1 API call instead of 2)
         logger.info(f"🚀 [SESSION {session_id}] Starting Gemini transcription and analysis")
         try:
-            result = await self._gemini.transcribe_and_analyze(path, asset.mime)
+            # Pass duration_sec for dynamic timeout calculation
+            result = await self._gemini.transcribe_and_analyze(path, asset.mime, session_obj.duration_sec)
             logger.info(f"✅ [SESSION {session_id}] Gemini processing completed successfully")
         except Exception as e:
             # If API call fails, mark session as failed but don't raise
@@ -94,13 +95,33 @@ class TranscriptionService:
                     detail=f"Failed to save transcript: {str(e)}"
                 ) from e
 
-        # Update title if provided and not already set
-        if result.get("title") and (not session_obj.title or session_obj.title.startswith("Session ")):
-            logger.info(f"📝 [SESSION {session_id}] Updating title to: '{result['title']}'")
+        # Update title if provided and current title looks auto-generated
+        # We replace the title only if it's timestamp-based or auto-generated
+        should_update_title = False
+        if result.get("title") and session_obj.title:
+            # Check if title looks auto-generated
+            import re
+            # Pattern 1: "Session YYYY-MM-DD HH:MM" (default format)
+            # Pattern 2: Timestamp-like filenames: "2025-01-22_14-30-45", "recording_1234567890", etc.
+            # Pattern 3: Just numbers or UUID-like strings
+            # Pattern 4: Generic names like "audio.m4a", "recording.mp3" (without extension already)
+            is_auto_generated = (
+                session_obj.title.startswith("Session ") or
+                bool(re.match(r'^\d{4}-\d{2}-\d{2}[_-]\d{2}[:-]\d{2}[:-]\d{2}', session_obj.title)) or
+                bool(re.match(r'^(recording|audio|file|untitled|new recording)[_-]?\d*$', session_obj.title, re.IGNORECASE)) or
+                bool(re.match(r'^\d{10,}$', session_obj.title)) or  # Unix timestamp
+                bool(re.match(r'^[a-f0-9]{8,}$', session_obj.title, re.IGNORECASE))  # UUID-like
+            )
+            should_update_title = is_auto_generated
+
+        if should_update_title:
+            logger.info(f"📝 [SESSION {session_id}] Auto-generated title detected: '{session_obj.title}'. Updating to: '{result['title']}'")
             session_obj.title = result["title"]
             db.add(session_obj)
             await db.commit()
             await db.refresh(session_obj)
+        elif result.get("title") and session_obj.title:
+            logger.info(f"📝 [SESSION {session_id}] Keeping user-provided title: '{session_obj.title}' (AI suggested: '{result['title']}')")
 
         # Save summary (partial success handling)
         if not session_obj.summary:

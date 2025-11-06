@@ -76,25 +76,34 @@ class RecorderController extends StateNotifier<RecorderState> with WidgetsBindin
       _audioInterruptionSubscription = session.interruptionEventStream.listen((event) {
         _handleAudioInterruption(event);
       });
-    } catch (e) {
-      print('[RecorderController] Failed to initialize audio session: $e');
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('[RecorderController] Failed to initialize audio session: $e');
+        print('[RecorderController] Stack trace: $stackTrace');
+      }
     }
   }
 
   void _handleAudioInterruption(AudioInterruptionEvent event) {
-    print('[RecorderController] Audio interruption: ${event.type}');
+    if (kDebugMode) {
+      print('[RecorderController] Audio interruption: ${event.type}');
+    }
 
     if (event.begin) {
       // Interruption began (call incoming, other app started audio)
       if (state.status == RecorderStatus.recording) {
-        print('[RecorderController] Pausing due to audio interruption');
+        if (kDebugMode) {
+          print('[RecorderController] Pausing due to audio interruption');
+        }
         pause();
       }
     } else {
       // Interruption ended
       if (state.status == RecorderStatus.paused && event.type == AudioInterruptionType.unknown) {
         // Auto-resume after interruption ends
-        print('[RecorderController] Resuming after audio interruption ended');
+        if (kDebugMode) {
+          print('[RecorderController] Resuming after audio interruption ended');
+        }
         Future.delayed(const Duration(milliseconds: 500), () {
           if (state.status == RecorderStatus.paused) {
             resume();
@@ -132,13 +141,21 @@ class RecorderController extends StateNotifier<RecorderState> with WidgetsBindin
         );
         return false;
       }
-    } on UnsupportedError catch (error) {
+    } on UnsupportedError catch (error, stackTrace) {
+      if (kDebugMode) {
+        print('[RecorderController] UnsupportedError checking microphone: $error');
+        print('[RecorderController] Stack trace: $stackTrace');
+      }
       state = state.copyWith(
         status: RecorderStatus.error,
         error: error.message ?? 'Recording is not supported on this platform.',
       );
       return false;
-    } on Exception catch (error) {
+    } on Exception catch (error, stackTrace) {
+      if (kDebugMode) {
+        print('[RecorderController] Exception checking microphone: $error');
+        print('[RecorderController] Stack trace: $stackTrace');
+      }
       state = state.copyWith(
         status: RecorderStatus.error,
         error: 'Failed to access microphone: $error',
@@ -153,13 +170,21 @@ class RecorderController extends StateNotifier<RecorderState> with WidgetsBindin
       _startTicker();
       state = state.copyWith(status: RecorderStatus.recording, elapsed: Duration.zero, error: null);
       return true;
-    } on UnsupportedError catch (error) {
+    } on UnsupportedError catch (error, stackTrace) {
+      if (kDebugMode) {
+        print('[RecorderController] UnsupportedError starting recording: $error');
+        print('[RecorderController] Stack trace: $stackTrace');
+      }
       state = state.copyWith(
         status: RecorderStatus.error,
         error: error.message ?? 'Recording is not supported on this platform.',
       );
       return false;
-    } on Exception catch (error) {
+    } on Exception catch (error, stackTrace) {
+      if (kDebugMode) {
+        print('[RecorderController] Exception starting recording: $error');
+        print('[RecorderController] Stack trace: $stackTrace');
+      }
       state = state.copyWith(
         status: RecorderStatus.error,
         error: 'Failed to start recording: $error',
@@ -189,12 +214,20 @@ class RecorderController extends StateNotifier<RecorderState> with WidgetsBindin
       );
       await _uploadManager.enqueueAndUpload(upload);
       state = state.copyWith(status: RecorderStatus.idle, elapsed: Duration.zero);
-    } on UnsupportedError catch (error) {
+    } on UnsupportedError catch (error, stackTrace) {
+      if (kDebugMode) {
+        print('[RecorderController] UnsupportedError stopping recording: $error');
+        print('[RecorderController] Stack trace: $stackTrace');
+      }
       state = state.copyWith(
         status: RecorderStatus.error,
         error: error.message ?? 'Recording is not supported on this platform.',
       );
-    } on Exception catch (error) {
+    } on Exception catch (error, stackTrace) {
+      if (kDebugMode) {
+        print('[RecorderController] Exception stopping recording: $error');
+        print('[RecorderController] Stack trace: $stackTrace');
+      }
       state = state.copyWith(
         status: RecorderStatus.error,
         error: 'Failed to save recording: $error',
@@ -210,12 +243,20 @@ class RecorderController extends StateNotifier<RecorderState> with WidgetsBindin
     try {
       await _recordingService.cancel();
       state = state.copyWith(status: RecorderStatus.idle, elapsed: Duration.zero);
-    } on UnsupportedError catch (error) {
+    } on UnsupportedError catch (error, stackTrace) {
+      if (kDebugMode) {
+        print('[RecorderController] UnsupportedError canceling recording: $error');
+        print('[RecorderController] Stack trace: $stackTrace');
+      }
       state = state.copyWith(
         status: RecorderStatus.error,
         error: error.message ?? 'Recording is not supported on this platform.',
       );
-    } on Exception catch (error) {
+    } on Exception catch (error, stackTrace) {
+      if (kDebugMode) {
+        print('[RecorderController] Exception canceling recording: $error');
+        print('[RecorderController] Stack trace: $stackTrace');
+      }
       state = state.copyWith(
         status: RecorderStatus.error,
         error: 'Failed to cancel recording: $error',
@@ -231,7 +272,11 @@ class RecorderController extends StateNotifier<RecorderState> with WidgetsBindin
       await _recordingService.pause();
       _ticker?.cancel(); // Pause the timer
       state = state.copyWith(status: RecorderStatus.paused);
-    } on Exception catch (error) {
+    } on Exception catch (error, stackTrace) {
+      if (kDebugMode) {
+        print('[RecorderController] Exception pausing recording: $error');
+        print('[RecorderController] Stack trace: $stackTrace');
+      }
       state = state.copyWith(
         status: RecorderStatus.error,
         error: 'Failed to pause recording: $error',
@@ -247,7 +292,11 @@ class RecorderController extends StateNotifier<RecorderState> with WidgetsBindin
       await _recordingService.resume();
       _startTicker(); // Resume the timer
       state = state.copyWith(status: RecorderStatus.recording);
-    } on Exception catch (error) {
+    } on Exception catch (error, stackTrace) {
+      if (kDebugMode) {
+        print('[RecorderController] Exception resuming recording: $error');
+        print('[RecorderController] Stack trace: $stackTrace');
+      }
       state = state.copyWith(
         status: RecorderStatus.error,
         error: 'Failed to resume recording: $error',

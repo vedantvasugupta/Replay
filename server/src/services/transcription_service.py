@@ -59,7 +59,8 @@ class TranscriptionService:
         # Use combined API call for efficiency (1 API call instead of 2)
         logger.info(f"🚀 [SESSION {session_id}] Starting Gemini transcription and analysis")
         try:
-            result = await self._gemini.transcribe_and_analyze(path, asset.mime)
+            # Pass duration_sec for dynamic timeout calculation
+            result = await self._gemini.transcribe_and_analyze(path, asset.mime, session_obj.duration_sec)
             logger.info(f"✅ [SESSION {session_id}] Gemini processing completed successfully")
         except Exception as e:
             # If API call fails, mark session as failed but don't raise

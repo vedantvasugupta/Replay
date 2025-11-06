@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -154,13 +155,25 @@ class UploadManager {
 
   /// Check all pending uploads and retry those that are ready
   Future<void> _checkAndRetryPending() async {
-    if (!_initialized || _ongoing != null) {
+    if (!_initialized) {
+      if (kDebugMode) {
+        print('[UploadManager] Not initialized, skipping retry check');
+      }
+      return;
+    }
+
+    if (_ongoing != null) {
+      if (kDebugMode) {
+        print('[UploadManager] Upload already in progress, will retry later');
+      }
       return;
     }
 
     for (final upload in List<PendingUpload>.from(_pending)) {
       if (_shouldRetry(upload)) {
         await _process(upload);
+        // Only process one upload at a time
+        break;
       }
     }
   }
@@ -184,7 +197,9 @@ class UploadManager {
   Future<void> _process(PendingUpload upload) async {
     // Check if file still exists
     if (!File(upload.filePath).existsSync()) {
-      print('[UploadManager] File not found, removing from queue: ${upload.filePath}');
+      if (kDebugMode) {
+        print('[UploadManager] File not found, removing from queue: ${upload.filePath}');
+      }
       _pending.remove(upload);
       await _persist();
       return;
@@ -193,15 +208,30 @@ class UploadManager {
     // Check if we should retry this upload
     if (!_shouldRetry(upload)) {
       if (upload.attemptCount >= maxRetries) {
-        print('[UploadManager] Max retries exceeded for: ${upload.filePath}');
-        print('[UploadManager] Upload permanently failed after ${upload.attemptCount} attempts');
+        if (kDebugMode) {
+          print('[UploadManager] Max retries exceeded for: ${upload.filePath}');
+          print('[UploadManager] Upload permanently failed after ${upload.attemptCount} attempts');
+        }
       }
       return;
     }
 
-    _ongoing ??= _execute(upload);
+    // Prevent concurrent uploads
+    if (_ongoing != null) {
+      if (kDebugMode) {
+        print('[UploadManager] Upload already in progress, skipping: ${upload.filePath}');
+      }
+      return;
+    }
+
+    _ongoing = _execute(upload);
     try {
       await _ongoing;
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('[UploadManager] Error in _process: $e');
+        print('[UploadManager] Stack trace: $stackTrace');
+      }
     } finally {
       _ongoing = null;
     }
@@ -210,7 +240,9 @@ class UploadManager {
   Future<void> _execute(PendingUpload upload) async {
     // Update retry metadata before attempting upload
     final attemptNumber = upload.attemptCount + 1;
-    print('[UploadManager] Starting upload attempt $attemptNumber/${maxRetries + 1} for: ${upload.filePath}');
+    if (kDebugMode) {
+      print('[UploadManager] Starting upload attempt $attemptNumber/${maxRetries + 1} for: ${upload.filePath}');
+    }
 
     final updatedUpload = upload.copyWith(
       attemptCount: attemptNumber,
@@ -232,7 +264,9 @@ class UploadManager {
       }
 
       final fileSize = await file.length();
-      print('[UploadManager] File validation - exists: true, size: $fileSize bytes');
+      if (kDebugMode) {
+        print('[UploadManager] File validation - exists: true, size: $fileSize bytes');
+      }
 
       if (fileSize == 0) {
         throw Exception('File is empty (0 bytes): ${updatedUpload.filePath}');
@@ -242,47 +276,70 @@ class UploadManager {
         filename: File(updatedUpload.filePath).uri.pathSegments.last,
         mime: updatedUpload.mime,
       );
-      print('[UploadManager] Got allocation, assetId: ${allocation.assetId}');
+      if (kDebugMode) {
+        print('[UploadManager] Got allocation, assetId: ${allocation.assetId}');
+      }
 
       await _repository.uploadFile(
         assetId: allocation.assetId,
         file: File(updatedUpload.filePath),
         mime: updatedUpload.mime,
       );
-      print('[UploadManager] File uploaded successfully');
+      if (kDebugMode) {
+        print('[UploadManager] File uploaded successfully');
+      }
 
       final sessionId = await _repository.ingest(
         assetId: allocation.assetId,
         durationSec: updatedUpload.durationSec,
         title: updatedUpload.title,
       );
-      print('[UploadManager] Ingest complete, sessionId: $sessionId');
+      if (kDebugMode) {
+        print('[UploadManager] Ingest complete, sessionId: $sessionId');
+      }
 
       // Only delete the file if the user hasn't opted to keep recordings locally
       if (!_keepRecordingsLocally) {
         await File(updatedUpload.filePath).delete().catchError((_) => File(''));
-        print('[UploadManager] Local recording deleted after upload');
+        if (kDebugMode) {
+          print('[UploadManager] Local recording deleted after upload');
+        }
       } else {
-        print('[UploadManager] Local recording kept at: ${updatedUpload.filePath}');
+        if (kDebugMode) {
+          print('[UploadManager] Local recording kept at: ${updatedUpload.filePath}');
+        }
       }
 
       _pending.remove(updatedUpload);
       await _persist();
-      print('[UploadManager] Upload completed successfully');
+      if (kDebugMode) {
+        print('[UploadManager] Upload completed successfully');
+      }
     } catch (e, stackTrace) {
-      print('[UploadManager] Upload failed (attempt $attemptNumber/${maxRetries + 1}): $e');
-      print('[UploadManager] Stack trace: $stackTrace');
+      // Always log errors, even in production (but with less verbosity)
+      if (kDebugMode) {
+        print('[UploadManager] Upload failed (attempt $attemptNumber/${maxRetries + 1}): $e');
+        print('[UploadManager] Stack trace: $stackTrace');
+      } else {
+        print('[UploadManager] Upload failed (attempt $attemptNumber/${maxRetries + 1}): $e');
+      }
 
       if (attemptNumber >= maxRetries) {
-        print('[UploadManager] Max retries reached. Upload will not be retried automatically.');
-        print('[UploadManager] File remains in queue. You can retry manually from the UI.');
+        if (kDebugMode) {
+          print('[UploadManager] Max retries reached. Upload will not be retried automatically.');
+          print('[UploadManager] File remains in queue. You can retry manually from the UI.');
+        }
       } else {
         final nextBackoffIndex = attemptNumber - 1;
         if (nextBackoffIndex < retryBackoffSeconds.length) {
           final nextRetryIn = retryBackoffSeconds[nextBackoffIndex];
-          print('[UploadManager] Will retry in $nextRetryIn seconds');
+          if (kDebugMode) {
+            print('[UploadManager] Will retry in $nextRetryIn seconds');
+          }
         }
       }
+      // Rethrow to ensure error is properly propagated
+      rethrow;
     }
   }
 

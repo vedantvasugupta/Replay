@@ -27,8 +27,14 @@ class GeminiService:
         if self.api_key:
             genai.configure(api_key=self.api_key)
 
-    async def transcribe_and_analyze(self, audio_path: Path, mime_type: str) -> dict[str, Any]:
-        """Transcribe audio and generate summary + title in a single API call using File API."""
+    async def transcribe_and_analyze(self, audio_path: Path, mime_type: str, duration_sec: int = 0) -> dict[str, Any]:
+        """Transcribe audio and generate summary + title in a single API call using File API.
+
+        Args:
+            audio_path: Path to the audio file
+            mime_type: MIME type of the audio file
+            duration_sec: Duration of the recording in seconds (for timeout calculation)
+        """
         if not self.api_key:
             text = f"Transcription placeholder for {audio_path.name}. Configure GEMINI_API_KEY for live transcription."
             return {
@@ -91,13 +97,14 @@ Important: Return ONLY valid JSON, no markdown formatting. If only one speaker i
             logger.info(f"📝 [UPLOAD INFO] URI: {uploaded_file.uri}, State: {uploaded_file.state.name}")
 
             # Wait for file to be processed by Gemini
+            import asyncio
             wait_start = time.time()
             check_count = 0
             while uploaded_file.state.name == "PROCESSING":
                 check_count += 1
                 elapsed = time.time() - wait_start
                 logger.info(f"⏳ [PROCESSING] Waiting for Gemini to process file... (check #{check_count}, {elapsed:.1f}s elapsed)")
-                time.sleep(5)  # Check every 5 seconds
+                await asyncio.sleep(5)  # Check every 5 seconds - use async sleep to avoid greenlet issues
                 uploaded_file = genai.get_file(uploaded_file.name)
 
             if uploaded_file.state.name == "FAILED":
@@ -108,7 +115,13 @@ Important: Return ONLY valid JSON, no markdown formatting. If only one speaker i
             logger.info(f"✅ [PROCESSING COMPLETE] File ready for transcription in {wait_duration:.1f}s: {uploaded_file.name}")
 
             # Generate content using the uploaded file reference
+            # Calculate dynamic timeout based on recording duration
+            # Base: 10 minutes + 1 minute per 5 minutes of audio (max 60 minutes for API call)
+            # Example: 82-min recording = 10 + (82/5) = 26.4 minutes
+            api_timeout_minutes = min(60, 10 + (duration_sec / 300)) if duration_sec > 0 else 10
+            api_timeout_seconds = int(api_timeout_minutes * 60)
             logger.info(f"🤖 [GENERATION START] Requesting transcription and analysis from {self.model}...")
+            logger.info(f"⏱️ [TIMEOUT] API timeout set to {api_timeout_minutes:.1f} minutes ({api_timeout_seconds}s) for {duration_sec}s recording")
             gen_start = time.time()
             model = genai.GenerativeModel(self.model)
             response = model.generate_content(
@@ -116,7 +129,7 @@ Important: Return ONLY valid JSON, no markdown formatting. If only one speaker i
                 generation_config=genai.GenerationConfig(
                     response_mime_type="application/json",
                 ),
-                request_options={"timeout": 600}  # 10 minutes for generation
+                request_options={"timeout": api_timeout_seconds}
             )
             gen_duration = time.time() - gen_start
             logger.info(f"✅ [GENERATION COMPLETE] Transcription received in {gen_duration:.1f}s")
@@ -138,7 +151,17 @@ Important: Return ONLY valid JSON, no markdown formatting. If only one speaker i
         logger.info(f"🔍 [JSON PARSE START] Parsing Gemini response...")
         try:
             import json
-            result = json.loads(text)
+            import re
+
+            # Sanitize control characters from JSON response
+            # Remove control characters except for \n, \r, \t
+            sanitized_text = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f-\x9f]', '', text)
+
+            if sanitized_text != text:
+                removed_count = len(text) - len(sanitized_text)
+                logger.warning(f"⚠️ [JSON SANITIZE] Removed {removed_count} invalid control characters from response")
+
+            result = json.loads(sanitized_text)
             logger.info(f"✅ [JSON PARSE SUCCESS] Response parsed successfully")
 
             # Extract speaker information

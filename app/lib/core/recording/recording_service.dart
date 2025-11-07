@@ -163,11 +163,10 @@ class RecordingService implements IRecordingService {
       baseDir = await getApplicationDocumentsDirectory();
     }
 
-    // Create a folder structure like: recordings/2025-01/
-    final yearMonth = '${now.year}-${now.month.toString().padLeft(2, '0')}';
-    final monthDir = Directory(p.join(baseDir.path, 'recordings', yearMonth));
-    if (!monthDir.existsSync()) {
-      monthDir.createSync(recursive: true);
+    // Create a single recordings folder (no date-based subfolders)
+    final recordingsDir = Directory(p.join(baseDir.path, 'recordings'));
+    if (!recordingsDir.existsSync()) {
+      recordingsDir.createSync(recursive: true);
     }
 
     // Create a filename with date and time: 2025-01-22_14-30-45.m4a
@@ -175,7 +174,7 @@ class RecordingService implements IRecordingService {
         '_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
     final filename = '$dateTime.$_fileExtension';
 
-    final filePath = p.join(monthDir.path, filename);
+    final filePath = p.join(recordingsDir.path, filename);
     print('[RecordingService] Saving recording to: $filePath');
 
     return filePath;

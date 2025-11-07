@@ -7,9 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..models.audio_asset import AudioAsset
+from ..models.message import Message
 from ..models.session import Session
 from ..models.enums import SessionStatus
 from ..schemas.session import (
+    MessageRead,
     SessionDetail,
     SessionListItem,
     SessionMeta,
@@ -81,6 +83,24 @@ class SessionService:
         session_obj.title = new_title
         db.add(session_obj)
         await db.commit()
+
+    async def get_messages(self, db: AsyncSession, user_id: int, session_id: int) -> list[MessageRead]:
+        """Get all messages for a session."""
+        # First verify session belongs to user
+        stmt = select(Session).where(Session.id == session_id, Session.user_id == user_id)
+        session_obj = await db.scalar(stmt)
+        if not session_obj:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+        # Get all messages for this session, ordered by creation time
+        stmt = (
+            select(Message)
+            .where(Message.session_id == session_id)
+            .order_by(Message.created_at.asc())
+        )
+        result = await db.execute(stmt)
+        messages = result.scalars().all()
+        return [MessageRead.model_validate(msg) for msg in messages]
 
     async def delete_session(
         self,

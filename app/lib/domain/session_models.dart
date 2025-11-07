@@ -147,6 +147,16 @@ class ChatMessage {
   final DateTime createdAt;
   final List<ChatCitation>? citations;
   final bool isThinking;
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      role: json['role'] as String,
+      content: json['content'] as String,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      citations: null, // Citations are only included in responses, not stored messages
+      isThinking: false,
+    );
+  }
 }
 
 class ChatResponse {

@@ -11,11 +11,23 @@ final chatControllerProvider = StateNotifierProvider.family<ChatController, Asyn
 );
 
 class ChatController extends StateNotifier<AsyncValue<List<ChatMessage>>> {
-  ChatController(this._repository, this._sessionId) : super(const AsyncValue.data([]));
+  ChatController(this._repository, this._sessionId) : super(const AsyncValue.data([])) {
+    _loadMessages();
+  }
 
   final SessionRepository _repository;
   final int _sessionId;
   bool _sending = false;
+
+  Future<void> _loadMessages() async {
+    state = const AsyncValue.loading();
+    try {
+      final messages = await _repository.fetchMessages(_sessionId);
+      state = AsyncValue.data(messages);
+    } catch (error, stack) {
+      state = AsyncValue.error(error, stack);
+    }
+  }
 
   Future<void> sendMessage(String message) async {
     if (_sending) {

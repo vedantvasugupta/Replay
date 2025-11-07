@@ -35,6 +35,12 @@ class SessionRepository {
     return SessionDetail.fromJson(response.data!);
   }
 
+  Future<List<ChatMessage>> fetchMessages(int sessionId) async {
+    final response = await _client.get<List<dynamic>>('/session/$sessionId/messages');
+    final data = response.data ?? [];
+    return data.map((item) => ChatMessage.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
   Future<ChatResponse> sendChat(int sessionId, String message) async {
     final response = await _client.post<Map<String, dynamic>>(
       '/session/$sessionId/chat',

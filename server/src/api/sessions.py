@@ -150,6 +150,16 @@ async def delete_session(
     return {"success": True, "message": "Session deleted successfully"}
 
 
+@router.get("/session/{session_id}/messages", response_model=list[MessageRead])
+async def get_session_messages(
+    session_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+    session_service: SessionService = Depends(get_session_service),
+) -> list[MessageRead]:
+    return await session_service.get_messages(db, user.id, session_id)
+
+
 @router.post("/session/{session_id}/chat", response_model=ChatMessageResponse)
 async def chat_with_session(
     session_id: int,

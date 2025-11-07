@@ -18,7 +18,7 @@ class TranscriptSegment(CamelModel):
     # Support both old format (start/end) and new format (speaker/start_time)
     text: str
     speaker: str | None = None
-    start_time: str | None = None
+    start_time: str | int | float | None = None  # Accept string, int, or float for compatibility
     start: float | None = None
     end: float | None = None
 

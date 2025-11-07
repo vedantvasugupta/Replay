@@ -21,8 +21,14 @@ class AuthService:
     def __init__(self):
         """Initialize AuthService with cached Google auth request object."""
         from google.auth.transport import requests as google_requests
-        # Cache the request object with timeout to avoid recreating it every time
-        self._google_request = google_requests.Request(timeout=5)
+        import requests as urllib_requests
+
+        # Create a requests session with timeout
+        session = urllib_requests.Session()
+        session.timeout = 5  # 5 second timeout for Google API calls
+
+        # Cache the request object using our configured session
+        self._google_request = google_requests.Request(session=session)
 
     async def register(self, session: AsyncSession, email: str, password: str) -> User:
         existing_stmt = select(User).where(User.email == email)

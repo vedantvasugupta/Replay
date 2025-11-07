@@ -17,6 +17,13 @@ class AuthService:
         # Web client ID
         "264393041730-ppuvv0kdvt02anp25nppoi9ff6f6rafn.apps.googleusercontent.com",
     ]
+
+    def __init__(self):
+        """Initialize AuthService with cached Google auth request object."""
+        from google.auth.transport import requests as google_requests
+        # Cache the request object with timeout to avoid recreating it every time
+        self._google_request = google_requests.Request(timeout=5)
+
     async def register(self, session: AsyncSession, email: str, password: str) -> User:
         existing_stmt = select(User).where(User.email == email)
         existing = await session.execute(existing_stmt)
@@ -54,7 +61,6 @@ class AuthService:
 
         try:
             from google.oauth2 import id_token as google_id_token
-            from google.auth.transport import requests
             logger.info("✅ [AUTH_SERVICE] Google auth libraries imported successfully")
         except ImportError as exc:
             logger.error("❌ [AUTH_SERVICE] Failed to import google auth libraries", exc_info=True)
@@ -74,9 +80,10 @@ class AuthService:
 
             for client_id in self.GOOGLE_CLIENT_IDS:
                 try:
+                    # Use cached request object with 5-second timeout
                     idinfo = google_id_token.verify_oauth2_token(
                         id_token,
-                        requests.Request(),
+                        self._google_request,
                         audience=client_id
                     )
                     logger.info(f"✅ [AUTH_SERVICE] Token verified successfully with client ID: {client_id}")
@@ -154,6 +161,19 @@ class AuthService:
             # Re-raise HTTPExceptions as-is
             raise
         except Exception as exc:
+            from sqlalchemy.exc import IntegrityError
+
+            # Handle race condition where user was created between check and insert
+            if isinstance(exc, IntegrityError) and "ix_users_email" in str(exc):
+                logger.warning(f"⚠️ [AUTH_SERVICE] Race condition detected - user already exists: {email}")
+                # Retry the lookup one more time
+                stmt = select(User).where(User.email == email)
+                result = await session.execute(stmt)
+                existing_user = result.scalar_one_or_none()
+                if existing_user:
+                    logger.info(f"✅ [AUTH_SERVICE] Retrieved existing user after race condition (ID: {existing_user.id})")
+                    return existing_user
+
             logger.error(f"❌ [AUTH_SERVICE] Unexpected error in authenticate_google: {str(exc)}", exc_info=True)
             logger.error(f"❌ [AUTH_SERVICE] Exception type: {type(exc).__name__}")
             raise HTTPException(

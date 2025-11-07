@@ -14,7 +14,16 @@ class Base(DeclarativeBase):
 
 def _build_engine() -> AsyncEngine:
     settings = get_settings()
-    return create_async_engine(settings.database_url, future=True, echo=False, pool_pre_ping=True)
+    return create_async_engine(
+        settings.database_url,
+        future=True,
+        echo=False,
+        pool_pre_ping=False,  # Disabled for performance - adds latency
+        pool_size=10,         # Connection pool size
+        max_overflow=20,      # Allow burst capacity beyond pool_size
+        pool_recycle=3600,    # Recycle connections after 1 hour
+        pool_timeout=30,      # Max seconds to wait for connection from pool
+    )
 
 
 engine: AsyncEngine = _build_engine()

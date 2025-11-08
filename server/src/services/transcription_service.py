@@ -127,12 +127,47 @@ class TranscriptionService:
         if not session_obj.summary:
             logger.info(f"💾 [SESSION {session_id}] Saving summary to database")
             summary_data = result.get("summary", {})
+
+            # Validate summary data structure
+            if not isinstance(summary_data, dict):
+                logger.error(f"❌ [SESSION {session_id}] Invalid summary data type: {type(summary_data)}, expected dict")
+                summary_data = {
+                    "summary": "",
+                    "action_items": [],
+                    "timeline": [],
+                    "decisions": [],
+                }
+
+            summary_text = summary_data.get("summary", "")
+            action_items = summary_data.get("action_items", [])
+            timeline = summary_data.get("timeline", [])
+            decisions = summary_data.get("decisions", [])
+
+            # Ensure all values are of correct type
+            if not isinstance(summary_text, str):
+                logger.warning(f"⚠️ [SESSION {session_id}] Summary text is not a string, converting: {type(summary_text)}")
+                summary_text = str(summary_text) if summary_text else ""
+
+            if not isinstance(action_items, list):
+                logger.warning(f"⚠️ [SESSION {session_id}] Action items is not a list, converting: {type(action_items)}")
+                action_items = []
+
+            if not isinstance(timeline, list):
+                logger.warning(f"⚠️ [SESSION {session_id}] Timeline is not a list, converting: {type(timeline)}")
+                timeline = []
+
+            if not isinstance(decisions, list):
+                logger.warning(f"⚠️ [SESSION {session_id}] Decisions is not a list, converting: {type(decisions)}")
+                decisions = []
+
+            logger.info(f"📊 [SESSION {session_id}] Summary data: text={len(summary_text)} chars, actions={len(action_items)}, timeline={len(timeline)}, decisions={len(decisions)}")
+
             summary = Summary(
                 session_id=session_obj.id,
-                summary=summary_data.get("summary", ""),
-                action_items_json=summary_data.get("action_items", []),
-                timeline_json=summary_data.get("timeline", []),
-                decisions_json=summary_data.get("decisions", []),
+                summary=summary_text,
+                action_items_json=action_items,
+                timeline_json=timeline,
+                decisions_json=decisions,
             )
             db.add(summary)
             try:
@@ -140,9 +175,14 @@ class TranscriptionService:
                 await db.refresh(session_obj)
                 logger.info(f"✅ [SESSION {session_id}] Summary saved successfully")
             except Exception as e:
-                logger.warning(f"⚠️ [SESSION {session_id}] Failed to save summary: {e}")
+                import traceback
+                error_details = traceback.format_exc()
+                logger.error(f"❌ [SESSION {session_id}] Failed to save summary: {e}")
+                logger.error(f"❌ [SESSION {session_id}] Error details:\n{error_details}")
+                logger.error(f"❌ [SESSION {session_id}] Summary data that failed: summary_text_len={len(summary_text)}, action_items={action_items}, timeline={timeline}, decisions={decisions}")
                 await db.rollback()
                 # Don't fail completely if summary fails - we have transcript
+                # But log detailed error for debugging
                 pass
 
         # Mark as ready only if both transcript and summary exist

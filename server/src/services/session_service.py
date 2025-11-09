@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from fastapi import HTTPException, status
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -34,12 +34,20 @@ class SessionService:
         return [SessionListItem.model_validate(session) for session in sessions]
 
     async def create_session(self, db: AsyncSession, user_id: int, asset: AudioAsset, duration: int | None, title: str | None) -> Session:
+        # If no title provided, generate one based on user's recording count
+        if not title:
+            # Count existing sessions for this user
+            count_stmt = select(func.count()).select_from(Session).where(Session.user_id == user_id)
+            result = await db.execute(count_stmt)
+            user_session_count = result.scalar_one()
+            title = f"Recording {user_session_count + 1}"
+
         session = Session(
             user_id=user_id,
             audio_asset_id=asset.id,
             status=SessionStatus.processing,
             duration_sec=duration,
-            title=title or datetime.now(timezone.utc).strftime("Session %Y-%m-%d %H:%M"),
+            title=title,
         )
         db.add(session)
         await db.commit()

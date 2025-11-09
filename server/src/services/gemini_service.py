@@ -284,8 +284,7 @@ Important: Return ONLY valid JSON, no markdown formatting. If only one speaker i
 
         prompt = (
             "You are a helpful meeting assistant with memory of our conversation. "
-            "Answer the user's question using the supplied transcript and our conversation history. "
-            "Quote the relevant excerpts with timestamps if supplied.\n\n"
+            "Answer the user's question using the supplied transcript and our conversation history.\n\n"
             f"Transcript:\n{transcript_text}"
             f"{history_context}\n\n"
             f"Current Question: {question}"

@@ -1242,20 +1242,33 @@ class _FormattedParagraph extends StatelessWidget {
         em: style.copyWith(fontStyle: FontStyle.italic),
         code: style.copyWith(
           fontFamily: 'monospace',
+          color: style.color, // Keep same color as regular text for readability
           backgroundColor: isUser
               ? Colors.white.withOpacity(0.2)
-              : Colors.grey.withOpacity(0.1),
+              : Colors.white.withOpacity(0.08),
         ),
         codeblockDecoration: BoxDecoration(
           color: isUser
               ? Colors.white.withOpacity(0.1)
-              : Colors.grey.withOpacity(0.05),
+              : Colors.white.withOpacity(0.05),
           borderRadius: BorderRadius.circular(8),
         ),
+        codeblockPadding: const EdgeInsets.all(12),
         blockquote: style.copyWith(
           fontStyle: FontStyle.italic,
-          color: style.color?.withOpacity(0.8),
+          color: style.color, // Use full opacity for better readability
         ),
+        blockquoteDecoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: isUser
+                  ? Colors.white.withOpacity(0.5)
+                  : const Color(0xFF6366F1).withOpacity(0.5),
+              width: 3,
+            ),
+          ),
+        ),
+        blockquotePadding: const EdgeInsets.only(left: 12),
         listBullet: style.copyWith(fontWeight: FontWeight.bold),
         listIndent: 24,
       ),

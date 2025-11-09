@@ -106,6 +106,123 @@ async def requeue_pending_jobs(
     }
 
 
+@router.get("/health/check-sessions")
+async def check_sessions_status(
+    db: AsyncSession = Depends(get_db_session),
+    limit: int = 10,
+):
+    """Check status of recent sessions including summary generation."""
+    from sqlalchemy import select
+    from ..models.session import Session
+    from ..models.summary import Summary
+    from ..models.job import Job
+
+    # Get latest sessions with summary info
+    stmt = (
+        select(Session)
+        .options(selectinload(Session.summary))
+        .order_by(Session.created_at.desc())
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    sessions = result.scalars().all()
+
+    session_info = []
+    for session in sessions:
+        # Get jobs for this session
+        job_stmt = (
+            select(Job)
+            .where(Job.session_id == session.id)
+            .order_by(Job.created_at.desc())
+        )
+        job_result = await db.execute(job_stmt)
+        jobs = job_result.scalars().all()
+
+        session_info.append({
+            "id": session.id,
+            "title": session.title,
+            "status": session.status.value,
+            "created_at": session.created_at.isoformat(),
+            "has_summary": session.summary is not None,
+            "jobs": [
+                {
+                    "id": job.id,
+                    "type": job.job_type.value,
+                    "status": job.status.value,
+                    "attempts": job.attempts,
+                    "error": job.error[:100] if job.error else None,
+                }
+                for job in jobs
+            ],
+        })
+
+    return {
+        "sessions": session_info,
+        "total_checked": len(sessions),
+    }
+
+
+@router.post("/health/retrigger-summaries")
+async def retrigger_summaries(
+    db: AsyncSession = Depends(get_db_session),
+    jobs_service: JobsService = Depends(get_jobs_service),
+    session_ids: list[int] | None = None,
+    limit: int = 10,
+):
+    """Re-trigger summary generation for sessions without summaries."""
+    from sqlalchemy import select
+    from ..models.session import Session
+    from ..models.summary import Summary
+    from ..models.job import Job, JobType, JobStatus
+
+    # Get sessions without summaries
+    if session_ids:
+        stmt = (
+            select(Session)
+            .options(selectinload(Session.summary))
+            .where(Session.id.in_(session_ids))
+        )
+    else:
+        stmt = (
+            select(Session)
+            .options(selectinload(Session.summary))
+            .order_by(Session.created_at.desc())
+            .limit(limit)
+        )
+
+    result = await db.execute(stmt)
+    sessions = result.scalars().all()
+
+    retriggered = []
+    for session in sessions:
+        if session.summary is None:
+            # Create a new summary job
+            new_job = Job(
+                session_id=session.id,
+                job_type=JobType.summarize,
+                status=JobStatus.pending,
+            )
+            db.add(new_job)
+            await db.flush()
+
+            # Queue the job
+            await jobs_service._queue.put(new_job.id)
+
+            retriggered.append({
+                "session_id": session.id,
+                "job_id": new_job.id,
+                "title": session.title,
+            })
+
+    await db.commit()
+
+    return {
+        "retriggered_count": len(retriggered),
+        "sessions": retriggered,
+        "message": f"Re-triggered summary generation for {len(retriggered)} sessions",
+    }
+
+
 @router.get("/sessions", response_model=list[SessionListItem])
 async def list_sessions(
     user: User = Depends(get_current_user),

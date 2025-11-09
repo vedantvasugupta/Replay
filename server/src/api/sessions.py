@@ -113,6 +113,7 @@ async def check_sessions_status(
 ):
     """Check status of recent sessions including summary generation."""
     from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
     from ..models.session import Session
     from ..models.summary import Summary
     from ..models.job import Job
@@ -171,6 +172,7 @@ async def retrigger_summaries(
 ):
     """Re-trigger summary generation for sessions without summaries."""
     from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
     from ..models.session import Session
     from ..models.summary import Summary
     from ..models.job import Job, JobType, JobStatus

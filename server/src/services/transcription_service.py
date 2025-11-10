@@ -74,7 +74,8 @@ class TranscriptionService:
             ) from e
 
         # Save transcript first (partial success handling)
-        if not session_obj.transcript:
+        has_transcript = session_obj.transcript is not None
+        if not has_transcript:
             logger.info(f"💾 [SESSION {session_id}] Saving transcript to database")
             transcript = Transcript(
                 session_id=session_obj.id,
@@ -85,7 +86,7 @@ class TranscriptionService:
             db.add(transcript)
             try:
                 await db.commit()
-                await db.refresh(session_obj)
+                has_transcript = True
                 logger.info(f"✅ [SESSION {session_id}] Transcript saved successfully")
             except Exception as e:
                 logger.error(f"❌ [SESSION {session_id}] Failed to save transcript: {e}")
@@ -105,10 +106,11 @@ class TranscriptionService:
             # Pattern 2: Timestamp-like filenames: "2025-01-22_14-30-45", "recording_1234567890", etc.
             # Pattern 3: Just numbers or UUID-like strings
             # Pattern 4: Generic names like "audio.m4a", "recording.mp3" (without extension already)
+            # Pattern 5: "Recording 36", "Recording #36" (temporary numbered recordings)
             is_auto_generated = (
                 session_obj.title.startswith("Session ") or
                 bool(re.match(r'^\d{4}-\d{2}-\d{2}[_-]\d{2}[:-]\d{2}[:-]\d{2}', session_obj.title)) or
-                bool(re.match(r'^(recording|audio|file|untitled|new recording)[_-]?\d*$', session_obj.title, re.IGNORECASE)) or
+                bool(re.match(r'^(recording|audio|file|untitled|new recording)[\s_-]?#?\d+$', session_obj.title, re.IGNORECASE)) or
                 bool(re.match(r'^\d{10,}$', session_obj.title)) or  # Unix timestamp
                 bool(re.match(r'^[a-f0-9]{8,}$', session_obj.title, re.IGNORECASE))  # UUID-like
             )
@@ -119,12 +121,12 @@ class TranscriptionService:
             session_obj.title = result["title"]
             db.add(session_obj)
             await db.commit()
-            await db.refresh(session_obj)
         elif result.get("title") and session_obj.title:
             logger.info(f"📝 [SESSION {session_id}] Keeping user-provided title: '{session_obj.title}' (AI suggested: '{result['title']}')")
 
         # Save summary (partial success handling)
-        if not session_obj.summary:
+        has_summary = session_obj.summary is not None
+        if not has_summary:
             logger.info(f"💾 [SESSION {session_id}] Saving summary to database")
             summary_data = result.get("summary", {})
             summary = Summary(
@@ -137,7 +139,7 @@ class TranscriptionService:
             db.add(summary)
             try:
                 await db.commit()
-                await db.refresh(session_obj)
+                has_summary = True
                 logger.info(f"✅ [SESSION {session_id}] Summary saved successfully")
             except Exception as e:
                 logger.warning(f"⚠️ [SESSION {session_id}] Failed to save summary: {e}")
@@ -146,7 +148,7 @@ class TranscriptionService:
                 pass
 
         # Mark as ready only if both transcript and summary exist
-        if session_obj.transcript and session_obj.summary:
+        if has_transcript and has_summary:
             logger.info(f"🎉 [SESSION {session_id}] Processing complete! Marking as ready")
             session_obj.status = SessionStatus.ready
         else:

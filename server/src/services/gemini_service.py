@@ -72,7 +72,9 @@ Requirements:
 
             import time
             upload_start = time.time()
-            uploaded_file = self.client.files.upload(path=str(audio_path))
+            # Open and upload the file
+            with open(audio_path, 'rb') as f:
+                uploaded_file = self.client.files.upload(file=f, mime_type=mime_type)
             upload_duration = time.time() - upload_start
             logger.info(f"✅ [UPLOAD COMPLETE] File uploaded in {upload_duration:.1f}s: {uploaded_file.name}")
             logger.info(f"📝 [UPLOAD INFO] URI: {uploaded_file.uri}, State: {uploaded_file.state}")

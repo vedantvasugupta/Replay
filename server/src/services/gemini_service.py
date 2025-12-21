@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import google.generativeai as genai
-from google.genai import types
+from google.generativeai import types
 import httpx
 
 from ..core.config import get_settings

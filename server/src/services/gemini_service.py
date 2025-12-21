@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import google.generativeai as genai
+from google.genai import types
 import httpx
 
 from ..core.config import get_settings
@@ -49,39 +50,20 @@ class GeminiService:
                 },
             }
 
-        # Combined prompt for transcription, summary, and title generation with speaker diarization
-        prompt = """Transcribe this meeting audio with speaker identification, then analyze it.
+        # Enhanced prompt for detailed transcription with language detection and emotion analysis
+        prompt = """
+Process the audio file and generate a detailed transcription.
 
-Identify different speakers in the audio and label them as Speaker 1, Speaker 2, etc.
-
-Return your response in the following JSON format:
-{
-  "transcript": "full verbatim transcription with speaker labels, e.g., 'Speaker 1: Hello. Speaker 2: Hi there.'",
-  "speakers": [
-    {
-      "id": "Speaker 1",
-      "characteristics": "brief description of voice (e.g., male, deep voice)"
-    },
-    {
-      "id": "Speaker 2",
-      "characteristics": "brief description of voice (e.g., female, higher pitch)"
-    }
-  ],
-  "utterances": [
-    {
-      "speaker": "Speaker 1",
-      "text": "the text spoken",
-      "start_time": "approximate start time in seconds or description like 'beginning', 'middle', 'end'"
-    }
-  ],
-  "title": "brief descriptive title (max 6 words)",
-  "summary": "2-3 sentence overview of the meeting",
-  "action_items": ["list", "of", "action", "items"],
-  "timeline": ["chronological", "key", "events"],
-  "decisions": ["decisions", "made"]
-}
-
-Important: Return ONLY valid JSON, no markdown formatting. If only one speaker is detected, still use the Speaker 1 format."""
+Requirements:
+1. Identify distinct speakers (e.g., Speaker 1, Speaker 2, or names if context allows).
+2. Provide accurate timestamps for each segment (Format: MM:SS).
+3. Detect the primary language of each segment.
+4. If the segment is in a language different than English, also provide the English translation.
+5. Identify the primary emotion of the speaker in this segment. You MUST choose exactly one of the following: Happy, Sad, Angry, Neutral.
+6. Provide a brief summary of the entire audio at the beginning.
+7. Generate a brief descriptive title (max 6 words).
+8. Extract action items, timeline, and decisions from the meeting.
+"""
 
         uploaded_file = None
         try:
@@ -128,6 +110,74 @@ Important: Return ONLY valid JSON, no markdown formatting. If only one speaker i
                 [uploaded_file, prompt],
                 generation_config=genai.GenerationConfig(
                     response_mime_type="application/json",
+                    response_schema=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            "title": types.Schema(
+                                type=types.Type.STRING,
+                                description="Brief descriptive title (max 6 words)",
+                            ),
+                            "summary": types.Schema(
+                                type=types.Type.STRING,
+                                description="A concise summary of the audio content.",
+                            ),
+                            "action_items": types.Schema(
+                                type=types.Type.ARRAY,
+                                description="List of action items from the meeting",
+                                items=types.Schema(type=types.Type.STRING),
+                            ),
+                            "timeline": types.Schema(
+                                type=types.Type.ARRAY,
+                                description="Chronological key events",
+                                items=types.Schema(type=types.Type.STRING),
+                            ),
+                            "decisions": types.Schema(
+                                type=types.Type.ARRAY,
+                                description="Decisions made in the meeting",
+                                items=types.Schema(type=types.Type.STRING),
+                            ),
+                            "segments": types.Schema(
+                                type=types.Type.ARRAY,
+                                description="List of transcribed segments with speaker and timestamp.",
+                                items=types.Schema(
+                                    type=types.Type.OBJECT,
+                                    properties={
+                                        "speaker": types.Schema(
+                                            type=types.Type.STRING,
+                                            description="Speaker identifier (e.g., Speaker 1, Speaker 2, or name)"
+                                        ),
+                                        "timestamp": types.Schema(
+                                            type=types.Type.STRING,
+                                            description="Timestamp in MM:SS format"
+                                        ),
+                                        "content": types.Schema(
+                                            type=types.Type.STRING,
+                                            description="The text spoken"
+                                        ),
+                                        "language": types.Schema(
+                                            type=types.Type.STRING,
+                                            description="Name of the language spoken"
+                                        ),
+                                        "language_code": types.Schema(
+                                            type=types.Type.STRING,
+                                            description="ISO language code (e.g., en, es, fr)"
+                                        ),
+                                        "translation": types.Schema(
+                                            type=types.Type.STRING,
+                                            description="English translation if language is not English, empty string otherwise"
+                                        ),
+                                        "emotion": types.Schema(
+                                            type=types.Type.STRING,
+                                            enum=["happy", "sad", "angry", "neutral"],
+                                            description="Primary emotion of the speaker"
+                                        ),
+                                    },
+                                    required=["speaker", "timestamp", "content", "language", "language_code", "emotion"],
+                                ),
+                            ),
+                        },
+                        required=["title", "summary", "segments"],
+                    ),
                 ),
                 request_options={"timeout": api_timeout_seconds}
             )
@@ -164,53 +214,96 @@ Important: Return ONLY valid JSON, no markdown formatting. If only one speaker i
             result = json.loads(sanitized_text)
             logger.info(f"✅ [JSON PARSE SUCCESS] Response parsed successfully")
 
-            # Extract speaker information
-            speakers = result.get("speakers", [])
-            utterances = result.get("utterances", [])
-            logger.info(f"👥 [SPEAKERS] Found {len(speakers)} speakers and {len(utterances)} utterances")
-
-            # Build segments from utterances if available with backward-compatible format
-            logger.info(f"🔨 [SEGMENTS BUILD] Building segments from utterances...")
-            segments = []
-            if utterances:
-                total_duration = max(30.0, len(result.get("transcript", text).split()) / 2.0)
-                segment_duration = total_duration / max(len(utterances), 1)
-
-                for idx, utterance in enumerate(utterances):
-                    # Calculate approximate numeric timestamps for backward compatibility
-                    start_time = idx * segment_duration
-                    end_time = (idx + 1) * segment_duration
-
-                    segments.append({
-                        "speaker": utterance.get("speaker", "Unknown"),
-                        "text": utterance.get("text", ""),
-                        "start": start_time,
-                        "end": end_time,
-                        "start_time": utterance.get("start_time", f"{int(start_time)}s"),
-                    })
-                logger.info(f"✅ [SEGMENTS COMPLETE] Built {len(segments)} segments with timestamps")
-            else:
-                # Fallback to single segment
-                logger.warning(f"⚠️ [SEGMENTS FALLBACK] No utterances found, using fallback single segment")
-                segments = [{"start": 0.0, "end": max(30.0, len(result.get("transcript", text).split()) / 2.0), "text": result.get("transcript", text)}]
-
+            # Extract structured data from new format
+            segments = result.get("segments", [])
             title = result.get("title", "Untitled Recording")
             summary_text = result.get("summary", "")
             action_items = result.get("action_items", [])
+            timeline = result.get("timeline", [])
+            decisions = result.get("decisions", [])
 
+            logger.info(f"🎯 [STRUCTURED DATA] Found {len(segments)} segments")
             logger.info(f"📋 [RESULT SUMMARY] Title: '{title}', Summary: {len(summary_text)} chars, Actions: {len(action_items)} items")
+
+            # Build full transcript text from segments and extract speakers
+            transcript_lines = []
+            speakers_seen = set()
+
+            # Process segments to build transcript and enhance with numeric timestamps
+            processed_segments = []
+            for idx, segment in enumerate(segments):
+                speaker = segment.get("speaker", "Unknown")
+                content = segment.get("content", "")
+                timestamp_str = segment.get("timestamp", "00:00")
+                language = segment.get("language", "English")
+                language_code = segment.get("language_code", "en")
+                translation = segment.get("translation", "")
+                emotion = segment.get("emotion", "neutral")
+
+                speakers_seen.add(speaker)
+
+                # Convert MM:SS timestamp to seconds for backward compatibility
+                try:
+                    parts = timestamp_str.split(":")
+                    if len(parts) == 2:
+                        minutes, seconds = int(parts[0]), int(parts[1])
+                        start_time = minutes * 60 + seconds
+                    else:
+                        start_time = idx * 10  # Fallback: 10 seconds per segment
+                except (ValueError, AttributeError):
+                    start_time = idx * 10
+
+                # Calculate end time (estimate based on next segment or add 10 seconds)
+                if idx < len(segments) - 1:
+                    try:
+                        next_timestamp = segments[idx + 1].get("timestamp", "00:00")
+                        next_parts = next_timestamp.split(":")
+                        if len(next_parts) == 2:
+                            next_minutes, next_seconds = int(next_parts[0]), int(next_parts[1])
+                            end_time = next_minutes * 60 + next_seconds
+                        else:
+                            end_time = start_time + 10
+                    except (ValueError, AttributeError):
+                        end_time = start_time + 10
+                else:
+                    end_time = start_time + 10
+
+                # Build transcript line with speaker label
+                transcript_lines.append(f"{speaker}: {content}")
+
+                # Create enhanced segment with all fields
+                processed_segments.append({
+                    "speaker": speaker,
+                    "text": content,
+                    "start": float(start_time),
+                    "end": float(end_time),
+                    "timestamp": timestamp_str,
+                    "language": language,
+                    "language_code": language_code,
+                    "translation": translation,
+                    "emotion": emotion,
+                })
+
+            # Build full transcript text
+            full_transcript = "\n\n".join(transcript_lines)
+
+            # Build speakers list (for backward compatibility)
+            speakers = [{"id": speaker, "characteristics": ""} for speaker in sorted(speakers_seen)]
+
+            logger.info(f"👥 [SPEAKERS] Found {len(speakers)} unique speakers")
+            logger.info(f"✅ [SEGMENTS COMPLETE] Processed {len(processed_segments)} segments with enhanced metadata")
             logger.info(f"🎉 [TRANSCRIBE SUCCESS] All processing complete for {audio_path.name}")
 
             return {
-                "text": result.get("transcript", text),
-                "segments": segments,
+                "text": full_transcript,
+                "segments": processed_segments,
                 "speakers": speakers,
                 "title": title,
                 "summary": {
                     "summary": summary_text,
                     "action_items": action_items,
-                    "timeline": result.get("timeline", []),
-                    "decisions": result.get("decisions", []),
+                    "timeline": timeline,
+                    "decisions": decisions,
                 },
             }
         except Exception as e:
@@ -219,7 +312,7 @@ Important: Return ONLY valid JSON, no markdown formatting. If only one speaker i
             logger.warning(f"⚠️ [FALLBACK] Using fallback response structure")
             return {
                 "text": text,
-                "segments": [{"start": 0.0, "end": max(30.0, len(text.split()) / 2.0), "text": text}],
+                "segments": [{"start": 0.0, "end": max(30.0, len(text.split()) / 2.0), "text": text, "speaker": "Unknown", "timestamp": "00:00", "language": "English", "language_code": "en", "translation": "", "emotion": "neutral"}],
                 "speakers": [],
                 "title": "Untitled Recording",
                 "summary": {

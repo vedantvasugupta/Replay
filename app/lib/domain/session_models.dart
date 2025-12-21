@@ -34,17 +34,39 @@ class SessionListItem {
 }
 
 class TranscriptSegment {
-  TranscriptSegment({required this.start, required this.end, required this.text});
+  TranscriptSegment({
+    required this.start,
+    required this.end,
+    required this.text,
+    this.speaker,
+    this.timestamp,
+    this.language,
+    this.languageCode,
+    this.translation,
+    this.emotion,
+  });
 
   final double start;
   final double end;
   final String text;
+  final String? speaker;
+  final String? timestamp; // MM:SS format
+  final String? language; // Language name (e.g., "English", "Spanish")
+  final String? languageCode; // ISO language code (e.g., "en", "es")
+  final String? translation; // English translation if language is not English
+  final String? emotion; // Primary emotion: happy, sad, angry, neutral
 
   factory TranscriptSegment.fromJson(Map<String, dynamic> json) {
     return TranscriptSegment(
       start: (json['start'] as num).toDouble(),
       end: (json['end'] as num).toDouble(),
       text: json['text'] as String,
+      speaker: json['speaker'] as String?,
+      timestamp: json['timestamp'] as String?,
+      language: json['language'] as String?,
+      languageCode: json['languageCode'] as String?,
+      translation: json['translation'] as String?,
+      emotion: json['emotion'] as String?,
     );
   }
 }

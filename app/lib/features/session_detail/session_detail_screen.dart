@@ -763,6 +763,34 @@ class _TranscriptView extends StatelessWidget {
 
   final SessionTranscript? transcript;
 
+  Color _getEmotionColor(String? emotion) {
+    switch (emotion?.toLowerCase()) {
+      case 'happy':
+        return Colors.green;
+      case 'sad':
+        return Colors.blue;
+      case 'angry':
+        return Colors.red;
+      case 'neutral':
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getEmotionIcon(String? emotion) {
+    switch (emotion?.toLowerCase()) {
+      case 'happy':
+        return Icons.sentiment_satisfied_alt;
+      case 'sad':
+        return Icons.sentiment_dissatisfied;
+      case 'angry':
+        return Icons.sentiment_very_dissatisfied;
+      case 'neutral':
+      default:
+        return Icons.sentiment_neutral;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (transcript == null) {
@@ -799,28 +827,213 @@ class _TranscriptView extends StatelessWidget {
         ),
       );
     }
+
+    // Check if we have structured segments with enhanced metadata
+    final hasStructuredData = transcript!.segments.isNotEmpty &&
+        transcript!.segments.first.speaker != null;
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.05),
+        if (hasStructuredData)
+          // Display structured segments
+          ...transcript!.segments.map((segment) {
+            final emotionColor = _getEmotionColor(segment.emotion);
+            final emotionIcon = _getEmotionIcon(segment.emotion);
+            final hasTranslation = segment.translation != null &&
+                segment.translation!.isNotEmpty &&
+                segment.languageCode != 'en';
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: emotionColor.withOpacity(0.3),
+                  width: 2,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header row with speaker, timestamp, and emotion
+                  Row(
+                    children: [
+                      // Speaker
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          segment.speaker ?? 'Unknown',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Timestamp
+                      if (segment.timestamp != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.access_time,
+                                size: 14,
+                                color: Colors.white.withOpacity(0.6),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                segment.timestamp!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white.withOpacity(0.6),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const Spacer(),
+                      // Emotion indicator
+                      Icon(
+                        emotionIcon,
+                        color: emotionColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        segment.emotion?.toUpperCase() ?? 'NEUTRAL',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: emotionColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Content
+                  SelectableText(
+                    segment.text,
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.6,
+                      color: Colors.white.withOpacity(0.9),
+                      letterSpacing: 0.25,
+                    ),
+                  ),
+                  // Language indicator (if not English)
+                  if (segment.languageCode != null &&
+                      segment.languageCode != 'en')
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.language,
+                            size: 14,
+                            color: Colors.orange.withOpacity(0.7),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            segment.language ?? segment.languageCode!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                              color: Colors.orange.withOpacity(0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  // Translation (if available)
+                  if (hasTranslation)
+                    Container(
+                      margin: const EdgeInsets.only(top: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.blue.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.translate,
+                                size: 14,
+                                color: Colors.blue.withOpacity(0.7),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'English Translation',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue.withOpacity(0.7),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          SelectableText(
+                            segment.translation!,
+                            style: TextStyle(
+                              fontSize: 14,
+                              height: 1.5,
+                              color: Colors.white.withOpacity(0.8),
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            );
+          })
+        else
+          // Fallback to simple text display for old format
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.05),
+              ),
+            ),
+            child: SelectableText(
+              transcript!.text,
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.8,
+                color: Colors.white.withOpacity(0.9),
+                letterSpacing: 0.25,
+              ),
             ),
           ),
-          child: SelectableText(
-            transcript!.text,
-            style: TextStyle(
-              fontSize: 15,
-              height: 1.8,
-              color: Colors.white.withOpacity(0.9),
-              letterSpacing: 0.25,
-            ),
-          ),
-        ),
       ],
     );
   }

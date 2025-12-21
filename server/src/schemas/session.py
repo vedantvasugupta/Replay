@@ -21,6 +21,11 @@ class TranscriptSegment(CamelModel):
     start_time: str | int | float | None = None  # Accept string, int, or float for compatibility
     start: float | None = None
     end: float | None = None
+    timestamp: str | None = None  # MM:SS format timestamp
+    language: str | None = None  # Language name (e.g., "English", "Spanish")
+    language_code: str | None = None  # ISO language code (e.g., "en", "es")
+    translation: str | None = None  # English translation if language is not English
+    emotion: str | None = None  # Primary emotion: happy, sad, angry, neutral
 
 
 class TranscriptRead(CamelModel):

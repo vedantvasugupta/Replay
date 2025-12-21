@@ -1,6 +1,6 @@
 """Add indexes for auth performance
 
-Revision ID: 0004_add_indexes_for_auth_performance
+Revision ID: 0004_add_auth_indexes
 Revises: 0003_add_speakers_to_transcripts
 Create Date: 2025-11-07
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 from alembic import op
 
 
-revision = "0004_add_indexes_for_auth_performance"
+revision = "0004_add_auth_indexes"
 down_revision = "0003_add_speakers_to_transcripts"
 branch_labels = None
 depends_on = None

@@ -4,8 +4,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import google.generativeai as genai
-from google.generativeai import types
+from google import genai
+from google.genai import types
 import httpx
 
 from ..core.config import get_settings
@@ -24,9 +24,8 @@ class GeminiService:
         self.api_key = settings.api_key
         self._endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
 
-        # Configure the SDK with API key
-        if self.api_key:
-            genai.configure(api_key=self.api_key)
+        # Create Gemini client if API key is configured
+        self.client = genai.Client(api_key=self.api_key) if self.api_key else None
 
     async def transcribe_and_analyze(self, audio_path: Path, mime_type: str, duration_sec: int = 0) -> dict[str, Any]:
         """Transcribe audio and generate summary + title in a single API call using File API.
@@ -73,23 +72,23 @@ Requirements:
 
             import time
             upload_start = time.time()
-            uploaded_file = genai.upload_file(path=str(audio_path), mime_type=mime_type)
+            uploaded_file = self.client.files.upload(path=str(audio_path))
             upload_duration = time.time() - upload_start
             logger.info(f"✅ [UPLOAD COMPLETE] File uploaded in {upload_duration:.1f}s: {uploaded_file.name}")
-            logger.info(f"📝 [UPLOAD INFO] URI: {uploaded_file.uri}, State: {uploaded_file.state.name}")
+            logger.info(f"📝 [UPLOAD INFO] URI: {uploaded_file.uri}, State: {uploaded_file.state}")
 
             # Wait for file to be processed by Gemini
             import asyncio
             wait_start = time.time()
             check_count = 0
-            while uploaded_file.state.name == "PROCESSING":
+            while uploaded_file.state == "PROCESSING":
                 check_count += 1
                 elapsed = time.time() - wait_start
                 logger.info(f"⏳ [PROCESSING] Waiting for Gemini to process file... (check #{check_count}, {elapsed:.1f}s elapsed)")
                 await asyncio.sleep(5)  # Check every 5 seconds - use async sleep to avoid greenlet issues
-                uploaded_file = genai.get_file(uploaded_file.name)
+                uploaded_file = self.client.files.get(name=uploaded_file.name)
 
-            if uploaded_file.state.name == "FAILED":
+            if uploaded_file.state == "FAILED":
                 logger.error(f"❌ [PROCESSING FAILED] Gemini file processing failed: {uploaded_file.state}")
                 raise Exception(f"Gemini file processing failed: {uploaded_file.state}")
 
@@ -105,10 +104,17 @@ Requirements:
             logger.info(f"🤖 [GENERATION START] Requesting transcription and analysis from {self.model}...")
             logger.info(f"⏱️ [TIMEOUT] API timeout set to {api_timeout_minutes:.1f} minutes ({api_timeout_seconds}s) for {duration_sec}s recording")
             gen_start = time.time()
-            model = genai.GenerativeModel(self.model)
-            response = model.generate_content(
-                [uploaded_file, prompt],
-                generation_config=genai.GenerationConfig(
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=[
+                    types.Content(
+                        parts=[
+                            types.Part(file_data=types.FileData(file_uri=uploaded_file.uri)),
+                            types.Part(text=prompt)
+                        ]
+                    )
+                ],
+                config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=types.Schema(
                         type=types.Type.OBJECT,
@@ -178,8 +184,7 @@ Requirements:
                         },
                         required=["title", "summary", "segments"],
                     ),
-                ),
-                request_options={"timeout": api_timeout_seconds}
+                )
             )
             gen_duration = time.time() - gen_start
             logger.info(f"✅ [GENERATION COMPLETE] Transcription received in {gen_duration:.1f}s")
@@ -192,7 +197,7 @@ Requirements:
             if uploaded_file:
                 try:
                     logger.info(f"🗑️ [CLEANUP] Deleting uploaded file: {uploaded_file.name}")
-                    genai.delete_file(uploaded_file.name)
+                    self.client.files.delete(name=uploaded_file.name)
                     logger.info(f"✅ [CLEANUP COMPLETE] File deleted successfully")
                 except Exception as e:
                     logger.warning(f"⚠️ [CLEANUP FAILED] Failed to delete uploaded file {uploaded_file.name}: {e}")

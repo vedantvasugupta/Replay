@@ -111,6 +111,14 @@ class RecordingService implements IRecordingService {
         numChannels: 2,
       );
     }
+    if (!kIsWeb && Platform.isAndroid) {
+      return const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 128000,
+        sampleRate: 44100,
+        audioInterruption: AudioInterruptionMode.none,
+      );
+    }
     return const RecordConfig(
       encoder: AudioEncoder.aacLc,
       bitRate: 128000,
@@ -125,35 +133,31 @@ class RecordingService implements IRecordingService {
     Directory baseDir;
 
     if (!kIsWeb && Platform.isAndroid) {
-      final sdkInt = await _getAndroidSdkVersion();
-
-      if (sdkInt >= 29) {
-        // Android 10+ (API 29+): Use app-specific external storage
-        // Path: /storage/emulated/0/Android/data/replay.app/files/Music/Replay/
-        // Benefits:
-        // - No permissions required
-        // - Accessible via file managers (under app's folder)
-        // - Works with scoped storage
-        // Note: Files are deleted when app is uninstalled
-        final externalDir = await getExternalStorageDirectory();
-        if (externalDir != null) {
-          // Use Music subfolder for better organization
-          baseDir = Directory(p.join(externalDir.path, 'Music', 'Replay'));
-        } else {
-          baseDir = await getApplicationDocumentsDirectory();
-        }
-      } else {
-        // Android < 10: Use public Music directory
-        // Path: /storage/emulated/0/Music/Replay/
-        // Requires WRITE_EXTERNAL_STORAGE permission (already requested)
-        final externalDir = await getExternalStorageDirectory();
-        if (externalDir != null) {
-          final parts = externalDir.path.split('/');
-          final publicPath = parts.sublist(0, parts.indexOf('Android')).join('/');
+      // For all Android versions, use public Music directory
+      // Path: /storage/emulated/0/Music/Replay/
+      // Benefits:
+      // - Accessible via any file manager app
+      // - Files persist after app uninstall
+      // - No special permissions needed on Android 10+ for app-created files
+      final externalDir = await getExternalStorageDirectory();
+      if (externalDir != null && externalDir.path.contains('Android/data')) {
+        // Convert from app-specific path to public Music path
+        // e.g., /storage/emulated/0/Android/data/replay.app/files
+        //    -> /storage/emulated/0/Music/Replay
+        final parts = externalDir.path.split('/');
+        final androidIndex = parts.indexOf('Android');
+        if (androidIndex > 0) {
+          final publicPath = parts.sublist(0, androidIndex).join('/');
           baseDir = Directory(p.join(publicPath, 'Music', 'Replay'));
         } else {
-          baseDir = await getApplicationDocumentsDirectory();
+          baseDir = Directory(p.join(externalDir.path, 'Music', 'Replay'));
         }
+      } else if (externalDir != null) {
+        baseDir = Directory(p.join(externalDir.path, 'Music', 'Replay'));
+      } else {
+        // Fallback to Downloads folder if external storage unavailable
+        baseDir = Directory('/storage/emulated/0/Download/Replay');
+        print('[RecordingService] Using fallback Downloads directory');
       }
     } else if (!kIsWeb && Platform.isIOS) {
       // On iOS, save to documents directory (accessible via Files app)
@@ -165,8 +169,26 @@ class RecordingService implements IRecordingService {
 
     // Create a single recordings folder (no date-based subfolders)
     final recordingsDir = Directory(p.join(baseDir.path, 'recordings'));
-    if (!recordingsDir.existsSync()) {
-      recordingsDir.createSync(recursive: true);
+
+    try {
+      if (!recordingsDir.existsSync()) {
+        recordingsDir.createSync(recursive: true);
+        print('[RecordingService] Created recordings directory: ${recordingsDir.path}');
+      }
+    } catch (e) {
+      print('[RecordingService] Failed to create directory at ${recordingsDir.path}: $e');
+      // Fallback to app documents directory
+      final fallbackDir = await getApplicationDocumentsDirectory();
+      final fallbackRecordingsDir = Directory(p.join(fallbackDir.path, 'recordings'));
+      if (!fallbackRecordingsDir.existsSync()) {
+        fallbackRecordingsDir.createSync(recursive: true);
+      }
+      print('[RecordingService] Using fallback directory: ${fallbackRecordingsDir.path}');
+
+      final dateTime = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}'
+          '_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
+      final filename = '$dateTime.$_fileExtension';
+      return p.join(fallbackRecordingsDir.path, filename);
     }
 
     // Create a filename with date and time: 2025-01-22_14-30-45.m4a

@@ -60,15 +60,16 @@ class RecorderController extends StateNotifier<RecorderState> with WidgetsBindin
 
     try {
       final session = await AudioSession.instance;
-      await session.configure(const AudioSessionConfiguration(
+      final avOptions = AVAudioSessionCategoryOptions.allowBluetooth |
+          AVAudioSessionCategoryOptions.allowBluetoothA2dp |
+          AVAudioSessionCategoryOptions.mixWithOthers |
+          AVAudioSessionCategoryOptions.defaultToSpeaker;
+      await session.configure(AudioSessionConfiguration(
         avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
-        avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.allowBluetooth |
-            AVAudioSessionCategoryOptions.allowBluetoothA2DP |
-            AVAudioSessionCategoryOptions.mixWithOthers |
-            AVAudioSessionCategoryOptions.defaultToSpeaker,
+        avAudioSessionCategoryOptions: avOptions,
         avAudioSessionMode: AVAudioSessionMode.spokenAudio,
         avAudioSessionRouteSharingPolicy: AVAudioSessionRouteSharingPolicy.defaultPolicy,
-        androidAudioAttributes: AndroidAudioAttributes(
+        androidAudioAttributes: const AndroidAudioAttributes(
           contentType: AndroidAudioContentType.speech,
           usage: AndroidAudioUsage.media,
         ),
@@ -88,6 +89,9 @@ class RecorderController extends StateNotifier<RecorderState> with WidgetsBindin
   }
 
   void _handleAudioInterruption(AudioInterruptionEvent event) {
+    if (!kIsWeb && Platform.isAndroid) {
+      return;
+    }
     if (kDebugMode) {
       print('[RecorderController] Audio interruption: ${event.type}');
     }

@@ -51,7 +51,7 @@ class AppTheme {
       ),
 
       // Card
-      cardTheme: CardThemeData(
+      cardTheme: CardTheme(
         color: cardGlass,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -211,7 +211,7 @@ class AppTheme {
       ),
 
       // Tab bar
-      tabBarTheme: TabBarThemeData(
+      tabBarTheme: TabBarTheme(
         labelColor: textPrimary,
         unselectedLabelColor: textSecondary,
         indicator: const UnderlineTabIndicator(
